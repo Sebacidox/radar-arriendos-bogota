@@ -7,6 +7,7 @@ import {
   UtensilsCrossed,
   RotateCcw,
   ArrowUpDown,
+  PlusCircle,
 } from 'lucide-react';
 
 const SORT_LABELS = {
@@ -56,6 +57,7 @@ export default function FilterBar({
   totalCount,
   filteredCount,
   operacion,
+  onOpenManualModal,
 }) {
   const toggleFlag = (key) => {
     onChange({ ...filters, [key]: !filters[key] });
@@ -123,6 +125,17 @@ export default function FilterBar({
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Limpiar
+            </button>
+          )}
+
+          {onOpenManualModal && (
+            <button
+              type="button"
+              onClick={onOpenManualModal}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sage bg-sage/10 px-3.5 py-2 text-xs font-bold text-sage transition hover:bg-sage hover:text-white"
+            >
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span>+ Evaluar aviso propio</span>
             </button>
           )}
         </div>

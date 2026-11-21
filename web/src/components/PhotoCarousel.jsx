@@ -9,6 +9,10 @@ import {
   AlertOctagon,
 } from 'lucide-react';
 import { isListingUnavailable } from '../utils/formatters';
+import {
+  BOGOTA_2026,
+  getPortalDuplicationRate,
+} from '../utils/valuationEngine';
 
 export default function PhotoCarousel({ listing }) {
   const [index, setIndex] = useState(0);
@@ -19,9 +23,32 @@ export default function PhotoCarousel({ listing }) {
   const total = validFotos.length;
 
   const isUnavailable = isListingUnavailable(listing);
-  const isNuevo = !isUnavailable && listing.estado.toUpperCase().startsWith('NUEVO');
-  const isBajo = !isUnavailable && listing.estado.toUpperCase().includes('BAJÓ');
-  const isNegotiable = !isUnavailable && Number(listing.diasEnMercado) >= 21;
+  const isManual = listing.origen === 'manual';
+  const isNuevo =
+    !isUnavailable && !isManual && listing.estado.toUpperCase().startsWith('NUEVO');
+
+  const history = Array.isArray(listing.priceHistory) ? listing.priceHistory : [];
+  let dropPct = 0;
+  if (history.length >= 2) {
+    const firstP = Number(history[0]?.price) || 0;
+    const lastP = Number(history[history.length - 1]?.price) || 0;
+    if (firstP > 0 && lastP > 0 && lastP < firstP) {
+      dropPct = Math.round(((firstP - lastP) / firstP) * 100);
+    }
+  }
+  const isBajo =
+    !isUnavailable && (dropPct > 0 || listing.estado.toUpperCase().includes('BAJÓ'));
+
+  const dias = Number(listing.diasEnMercado) || 0;
+  const highMarginThreshold =
+    listing.operacion === 'venta'
+      ? BOGOTA_2026.DIAS_VITRINA_ALTO_MARGEN.venta
+      : BOGOTA_2026.DIAS_VITRINA_ALTO_MARGEN.arriendo;
+  const isHighMargin = !isUnavailable && dias >= highMarginThreshold;
+  const isModerateAge =
+    !isUnavailable && !isHighMargin && listing.operacion === 'arriendo' && dias >= 21;
+
+  const dupRate = getPortalDuplicationRate(listing.fuente);
 
   const handlePrev = (e) => {
     e.stopPropagation();
@@ -61,11 +88,17 @@ export default function PhotoCarousel({ listing }) {
       )}
 
       {/* Etiquetas flotantes */}
-      <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-1.5">
+      <div className="pointer-events-none absolute left-3 top-3 flex max-w-[68%] flex-wrap gap-1.5">
         {isUnavailable && (
           <span className="inline-flex items-center gap-1 rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold text-white shadow">
             <AlertOctagon className="h-3 w-3" />
             Ya no disponible en el portal
+          </span>
+        )}
+        {isManual && !isUnavailable && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-purple-700 px-2.5 py-1 text-xs font-semibold text-white shadow">
+            <Sparkles className="h-3 w-3" />
+            Aviso propio
           </span>
         )}
         {isNuevo && (
@@ -77,13 +110,19 @@ export default function PhotoCarousel({ listing }) {
         {isBajo && (
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white shadow">
             <TrendingDown className="h-3 w-3" />
-            Bajó de precio
+            {dropPct > 0 ? `Bajó ${dropPct}%` : 'Bajó de precio'}
           </span>
         )}
-        {isNegotiable && (
+        {isHighMargin && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-800 px-2.5 py-1 text-xs font-semibold text-white shadow">
+            <Clock className="h-3 w-3" />
+            {dias} días en vitrina · Alto margen
+          </span>
+        )}
+        {isModerateAge && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amberWarm px-2.5 py-1 text-xs font-semibold text-white shadow">
             <Clock className="h-3 w-3" />
-            21+ días — Margen para negociar
+            {dias} días publicado
           </span>
         )}
       </div>
@@ -92,6 +131,7 @@ export default function PhotoCarousel({ listing }) {
       {listing.fuente && (
         <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-ink/75 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
           {listing.fuente}
+          {dupRate >= 0.3 ? ` · ${Math.round(dupRate * 100)}% rep.` : ''}
         </span>
       )}
 

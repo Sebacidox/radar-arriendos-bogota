@@ -1,4 +1,10 @@
-import { parseChecklist } from '../utils/formatters';
+import {
+  mergeChecklistAndExtras,
+  parseChecklist,
+  parseListingExtras,
+} from '../utils/formatters';
+
+const LOCAL_MANUAL_KEY = 'radar_manual_listings_v1';
 
 export const DEFAULT_APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbwxAM1wrNEMJ9sLopwkRB70opKP67Zs4n4dcGWVwsTGU-rXfVWjD9sKyMteWXh_v7j3/exec';
@@ -63,37 +69,46 @@ function splitComfortTags(val) {
     .filter(Boolean);
 }
 
-function normalizeListingRow(row, operacion, sheetName) {
+function normalizeListingRow(row, operacion, sheetName, origen = 'radar') {
   const isVenta = operacion === 'venta';
   const canon = isVenta ? 0 : parseNumber(row['Canon'], 0);
   const precioVenta = isVenta ? parseNumber(row['Precio Venta'], 0) : 0;
   const admin = isVenta
-    ? parseNumber(row['Admin Mensual'], 0)
+    ? parseNumber(row['Admin Mensual'] !== undefined ? row['Admin Mensual'] : row['Admin'], 0)
     : parseNumber(row['Admin'], 0);
   const totalMensual = isVenta
     ? precioVenta
     : parseNumber(row['Total Mensual'], canon + admin);
-  const costoM2 = isVenta
+  const area = parseNumber(row['Área (m²)'], 0);
+  const rawCostoM2 = isVenta
     ? parseNumber(row['Precio/m²'], 0)
     : parseNumber(row['Costo/m²'], 0);
+  const costoM2 =
+    rawCostoM2 > 0
+      ? rawCostoM2
+      : area > 0
+        ? Math.round((isVenta ? precioVenta : totalMensual) / area)
+        : 0;
 
   const lat = row['Lat'] !== '' && row['Lat'] !== undefined ? parseNumber(row['Lat'], null) : null;
   const lng = row['Lng'] !== '' && row['Lng'] !== undefined ? parseNumber(row['Lng'], null) : null;
+  const extras = parseListingExtras(row['Checklist_Visita']);
 
   return {
     id: `${operacion}:${String(row['Fingerprint'] || '')}`,
     operacion,
     sheetName,
+    origen,
     fingerprint: String(row['Fingerprint'] || '').trim(),
-    score: parseNumber(row['Puntuación'], 0),
-    estado: String(row['Estado'] || '').trim(),
-    zona: String(row['Zona'] || '').trim(),
+    score: parseNumber(row['Puntuación'], origen === 'manual' ? 7.5 : 0),
+    estado: String(row['Estado'] || (origen === 'manual' ? 'Aviso propio' : '')).trim(),
+    zona: String(row['Zona'] || 'Oriental').trim(),
     barrio: String(row['Barrio'] || '').trim(),
     direccion: String(row['Dirección'] || 'No publicada').trim(),
     lat,
     lng,
     estrato: parseNumber(row['Estrato'], 4),
-    area: parseNumber(row['Área (m²)'], 0),
+    area,
     hab: parseNumber(row['Hab'], 0),
     banos: parseNumber(row['Baños'], 0),
     garajes: parseNumber(row['Garajes'], 0),
@@ -109,12 +124,15 @@ function normalizeListingRow(row, operacion, sheetName) {
     etiquetasConfort: splitComfortTags(row['Etiquetas_Confort']),
     diasEnMercado: parseNumber(row['Dias_en_Mercado'], 0),
     fotos: splitPipeList(row['Fotos']),
-    fuente: String(row['Fuente'] || '').trim(),
+    fuente: String(row['Fuente'] || (origen === 'manual' ? 'Aviso propio' : '')).trim(),
     enlaces: splitLinks(row['Enlaces']),
     fechaDeteccion: String(row['Fecha Detección'] || '').trim(),
     estadoVisita: String(row['Estado_Visita'] || '').trim(),
     notasPersonales: String(row['Notas_Personales'] || '').trim(),
     checklistVisita: parseChecklist(row['Checklist_Visita']),
+    legalShield: extras.legalShield,
+    priceHistory: extras.priceHistory,
+    meta: extras.meta,
   };
 }
 
@@ -200,6 +218,18 @@ export async function fetchRadarData() {
   const ventas = (data.ventas || []).map((row) =>
     normalizeListingRow(row, 'venta', sheetNames.VENTAS || 'Top semana ventas')
   );
+  const misAvisos = (data.misAvisos || [])
+    .map((row) => {
+      const op = String(row['Operación'] || '').toLowerCase() === 'venta' ? 'venta' : 'arriendo';
+      return normalizeListingRow(
+        row,
+        op,
+        sheetNames.MIS_AVISOS || 'Mis_Avisos',
+        'manual'
+      );
+    })
+    .filter((item) => item.fingerprint);
+
   const mejoras = (data.mejoras || [])
     .map(normalizeMejoraRow)
     .filter((m) => m.descripcion)
@@ -210,6 +240,7 @@ export async function fetchRadarData() {
     sheetNames,
     arriendos,
     ventas,
+    misAvisos,
     resumenBarrios: (data.resumenBarrios || []).map((r) => normalizeResumenRow(r, 'arriendo')),
     resumenBarriosVentas: (data.resumenBarriosVentas || []).map((r) =>
       normalizeResumenRow(r, 'venta')
@@ -287,4 +318,70 @@ export async function submitMejora({ autor, tipo, seccion, descripcion }) {
     emailWarning: String(result.emailWarning || '').trim(),
     mejora: normalizeMejoraRow(result.mejora || {}),
   };
+}
+
+export function loadLocalManualListings() {
+  try {
+    const raw = localStorage.getItem(LOCAL_MANUAL_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalManualListings(listings) {
+  try {
+    localStorage.setItem(LOCAL_MANUAL_KEY, JSON.stringify(listings || []));
+  } catch {
+    // Ignorar si localStorage no está disponible o excede cuota
+  }
+}
+
+export async function saveManualListingInSheets(listing) {
+  const checklistPayload = mergeChecklistAndExtras(listing.checklistVisita, {
+    legalShield: listing.legalShield,
+    priceHistory: listing.priceHistory,
+    meta: listing.meta,
+  });
+
+  return postToAppsScript(
+    {
+      action: 'saveManualListing',
+      listing: {
+        fingerprint: listing.fingerprint,
+        operacion: listing.operacion,
+        barrio: listing.barrio,
+        direccion: listing.direccion,
+        zona: listing.zona,
+        estrato: listing.estrato,
+        area: listing.area,
+        hab: listing.hab,
+        banos: listing.banos,
+        garajes: listing.garajes,
+        canon: listing.canon,
+        precioVenta: listing.precioVenta,
+        admin: listing.admin,
+        etiquetasConfort: listing.etiquetasConfort,
+        fuente: listing.fuente,
+        enlaces: (listing.enlaces || []).filter((u) => String(u).startsWith('http')),
+        fechaDeteccion: listing.fechaDeteccion,
+        estadoVisita: listing.estadoVisita || '',
+        notasPersonales: listing.notasPersonales || '',
+        checklistPayload,
+      },
+    },
+    'No se pudo sincronizar el aviso propio con Google Sheets'
+  );
+}
+
+export async function deleteManualListingInSheets(fingerprint) {
+  return postToAppsScript(
+    {
+      action: 'deleteManualListing',
+      fingerprint,
+    },
+    'No se pudo eliminar el aviso propio de Google Sheets'
+  );
 }

@@ -1,0 +1,350 @@
+{
+  "metadata": {
+    "version": "2026-11",
+    "attribution": "Referentes de mercado: Aptologia (aptologia.com/datos, nov. 2026) · Cartografía: IDECA Catastro Bogotá · Tasas: Superfinanciera / datos.gov.co",
+    "tasasFallback2026": {
+      "fnaEA": 0.1237,
+      "avVillasEA": 0.1386,
+      "promedioNoVisEA": 0.1547,
+      "topeMercadoEA": 0.1635,
+      "fechaCorte": "2026-11-06"
+    },
+    "bogotaMedians": {
+      "arriendoCmnM2": 47000,
+      "ventaM2": 6600000,
+      "diasVitrinaArriendo": 32,
+      "pctAdminPorEstrato": {
+        "2": 0.158,
+        "3": 0.143,
+        "4": 0.159,
+        "5": 0.180,
+        "6": 0.170
+      }
+    }
+  },
+  "barrios": {
+    "cedritos": {
+      "nombre": "Cedritos",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 36000,
+        "medianaM2": 42500,
+        "p75M2": 49500,
+        "adminMediana": 420000,
+        "pctDuenoDirecto": 0.09
+      },
+      "venta": {
+        "p25M2": 5300000,
+        "medianaM2": 6150000,
+        "p75M2": 7100000,
+        "adminMediana": 450000
+      }
+    },
+    "contador": {
+      "nombre": "Contador",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 36500,
+        "medianaM2": 43000,
+        "p75M2": 50000,
+        "adminMediana": 440000,
+        "pctDuenoDirecto": 0.08
+      },
+      "venta": {
+        "p25M2": 5400000,
+        "medianaM2": 6250000,
+        "p75M2": 7200000,
+        "adminMediana": 460000
+      }
+    },
+    "santa barbara norte": {
+      "nombre": "Santa Bárbara",
+      "estratoTipico": 5,
+      "arriendo": {
+        "p25M2": 42000,
+        "medianaM2": 50000,
+        "p75M2": 61000,
+        "adminMediana": 560000,
+        "pctDuenoDirecto": 0.08
+      },
+      "venta": {
+        "p25M2": 6200000,
+        "medianaM2": 7250000,
+        "p75M2": 8400000,
+        "adminMediana": 600000
+      }
+    },
+    "barrancas": {
+      "nombre": "Barrancas Norte",
+      "estratoTipico": 3,
+      "arriendo": {
+        "p25M2": 31000,
+        "medianaM2": 36500,
+        "p75M2": 42000,
+        "adminMediana": 320000,
+        "pctDuenoDirecto": 0.22
+      },
+      "venta": {
+        "p25M2": 4600000,
+        "medianaM2": 5400000,
+        "p75M2": 6200000,
+        "adminMediana": 350000
+      }
+    },
+    "caobos": {
+      "nombre": "Caobos Salazar",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 36000,
+        "medianaM2": 42000,
+        "p75M2": 49000,
+        "adminMediana": 430000,
+        "pctDuenoDirecto": 0.09
+      },
+      "venta": {
+        "p25M2": 5400000,
+        "medianaM2": 6200000,
+        "p75M2": 7100000,
+        "adminMediana": 460000
+      }
+    },
+    "alcala": {
+      "nombre": "Alcalá",
+      "estratoTipico": 3,
+      "arriendo": {
+        "p25M2": 32000,
+        "medianaM2": 37500,
+        "p75M2": 43500,
+        "adminMediana": 330000,
+        "pctDuenoDirecto": 0.14
+      },
+      "venta": {
+        "p25M2": 4800000,
+        "medianaM2": 5600000,
+        "p75M2": 6400000,
+        "adminMediana": 360000
+      }
+    },
+    "prado veraniego norte": {
+      "nombre": "Prado Veraniego",
+      "estratoTipico": 3,
+      "arriendo": {
+        "p25M2": 30000,
+        "medianaM2": 35500,
+        "p75M2": 41000,
+        "adminMediana": 310000,
+        "pctDuenoDirecto": 0.12
+      },
+      "venta": {
+        "p25M2": 4500000,
+        "medianaM2": 5250000,
+        "p75M2": 6050000,
+        "adminMediana": 340000
+      }
+    },
+    "las villas": {
+      "nombre": "Las Villas",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 34500,
+        "medianaM2": 40500,
+        "p75M2": 47000,
+        "adminMediana": 400000,
+        "pctDuenoDirecto": 0.10
+      },
+      "venta": {
+        "p25M2": 5200000,
+        "medianaM2": 6000000,
+        "p75M2": 6900000,
+        "adminMediana": 430000
+      }
+    },
+    "iberia": {
+      "nombre": "Iberia",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 34500,
+        "medianaM2": 40000,
+        "p75M2": 46500,
+        "adminMediana": 410000,
+        "pctDuenoDirecto": 0.09
+      },
+      "venta": {
+        "p25M2": 5150000,
+        "medianaM2": 5950000,
+        "p75M2": 6850000,
+        "adminMediana": 420000
+      }
+    },
+    "colina campestre": {
+      "nombre": "Colina Campestre",
+      "estratoTipico": 5,
+      "arriendo": {
+        "p25M2": 37000,
+        "medianaM2": 44000,
+        "p75M2": 52000,
+        "adminMediana": 480000,
+        "pctDuenoDirecto": 0.08
+      },
+      "venta": {
+        "p25M2": 5600000,
+        "medianaM2": 6500000,
+        "p75M2": 7500000,
+        "adminMediana": 520000
+      }
+    },
+    "mazuren": {
+      "nombre": "Mazurén",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 31500,
+        "medianaM2": 37000,
+        "p75M2": 43000,
+        "adminMediana": 390000,
+        "pctDuenoDirecto": 0.09
+      },
+      "venta": {
+        "p25M2": 4750000,
+        "medianaM2": 5550000,
+        "p75M2": 6400000,
+        "adminMediana": 410000
+      }
+    },
+    "chico norte": {
+      "nombre": "Chicó Norte",
+      "estratoTipico": 6,
+      "arriendo": {
+        "p25M2": 52000,
+        "medianaM2": 64000,
+        "p75M2": 80000,
+        "adminMediana": 780000,
+        "pctDuenoDirecto": 0.06
+      },
+      "venta": {
+        "p25M2": 7600000,
+        "medianaM2": 9100000,
+        "p75M2": 10800000,
+        "adminMediana": 850000
+      }
+    },
+    "los rosales": {
+      "nombre": "Los Rosales",
+      "estratoTipico": 6,
+      "arriendo": {
+        "p25M2": 58000,
+        "medianaM2": 72000,
+        "p75M2": 90000,
+        "adminMediana": 950000,
+        "pctDuenoDirecto": 0.05
+      },
+      "venta": {
+        "p25M2": 8400000,
+        "medianaM2": 10200000,
+        "p75M2": 12400000,
+        "adminMediana": 1050000
+      }
+    },
+    "ciudad salitre": {
+      "nombre": "Ciudad Salitre",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 40000,
+        "medianaM2": 47500,
+        "p75M2": 56000,
+        "adminMediana": 470000,
+        "pctDuenoDirecto": 0.08
+      },
+      "venta": {
+        "p25M2": 6100000,
+        "medianaM2": 7100000,
+        "p75M2": 8200000,
+        "adminMediana": 500000
+      }
+    },
+    "chapinero alto": {
+      "nombre": "Chapinero Alto",
+      "estratoTipico": 5,
+      "arriendo": {
+        "p25M2": 44000,
+        "medianaM2": 53000,
+        "p75M2": 64000,
+        "adminMediana": 520000,
+        "pctDuenoDirecto": 0.08
+      },
+      "venta": {
+        "p25M2": 6400000,
+        "medianaM2": 7550000,
+        "p75M2": 8800000,
+        "adminMediana": 550000
+      }
+    },
+    "teusaquillo": {
+      "nombre": "Teusaquillo",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 34000,
+        "medianaM2": 40000,
+        "p75M2": 47000,
+        "adminMediana": 360000,
+        "pctDuenoDirecto": 0.14
+      },
+      "venta": {
+        "p25M2": 5000000,
+        "medianaM2": 5850000,
+        "p75M2": 6750000,
+        "adminMediana": 380000
+      }
+    },
+    "normandia": {
+      "nombre": "Normandía",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 33500,
+        "medianaM2": 39500,
+        "p75M2": 46000,
+        "adminMediana": 350000,
+        "pctDuenoDirecto": 0.13
+      },
+      "venta": {
+        "p25M2": 4950000,
+        "medianaM2": 5750000,
+        "p75M2": 6650000,
+        "adminMediana": 370000
+      }
+    },
+    "la floresta": {
+      "nombre": "La Floresta",
+      "estratoTipico": 4,
+      "arriendo": {
+        "p25M2": 35000,
+        "medianaM2": 41000,
+        "p75M2": 48000,
+        "adminMediana": 390000,
+        "pctDuenoDirecto": 0.30
+      },
+      "venta": {
+        "p25M2": 5150000,
+        "medianaM2": 5950000,
+        "p75M2": 6850000,
+        "adminMediana": 420000
+      }
+    },
+    "usaquen": {
+      "nombre": "Usaquén",
+      "estratoTipico": 5,
+      "arriendo": {
+        "p25M2": 41000,
+        "medianaM2": 49000,
+        "p75M2": 59000,
+        "adminMediana": 540000,
+        "pctDuenoDirecto": 0.05
+      },
+      "venta": {
+        "p25M2": 6100000,
+        "medianaM2": 7150000,
+        "p75M2": 8350000,
+        "adminMediana": 580000
+      }
+    }
+  }
+}

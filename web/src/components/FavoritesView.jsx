@@ -8,6 +8,7 @@ import {
   Eye,
   CheckSquare,
   Square,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   CHECKLIST_ITEMS,
@@ -21,6 +22,7 @@ export default function FavoritesView({
   onSaveVisitDetails,
   onSetEstadoVisita,
   savingId,
+  onOpenDecision,
 }) {
   if (favorites.length === 0) {
     return (
@@ -68,6 +70,7 @@ export default function FavoritesView({
             onSaveVisitDetails={onSaveVisitDetails}
             onSetEstadoVisita={onSetEstadoVisita}
             isSaving={savingId === item.id}
+            onOpenDecision={onOpenDecision}
           />
         ))}
       </div>
@@ -80,6 +83,7 @@ function FavoriteVisitCard({
   onSaveVisitDetails,
   onSetEstadoVisita,
   isSaving,
+  onOpenDecision,
 }) {
   const [notes, setNotes] = useState(listing.notasPersonales || '');
   const [checklist, setChecklist] = useState(listing.checklistVisita);
@@ -158,7 +162,17 @@ function FavoriteVisitCard({
           </p>
         </div>
 
-        <div className="no-print flex items-center gap-2">
+        <div className="no-print flex flex-wrap items-center gap-2">
+          {onOpenDecision && (
+            <button
+              type="button"
+              onClick={() => onOpenDecision(listing)}
+              className="inline-flex items-center gap-1 rounded-lg bg-sage/10 px-2.5 py-1.5 text-xs font-bold text-sage hover:bg-sage/20"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Analizar y Ofertar
+            </button>
+          )}
           {streetViewUrl && (
             <a
               href={streetViewUrl}

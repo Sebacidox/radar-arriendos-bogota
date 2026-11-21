@@ -18,6 +18,7 @@ var SHEET_NAMES = {
   RESUMEN_ARRIENDOS: "Resumen_Barrios",
   RESUMEN_VENTAS: "Resumen_Barrios_Ventas",
   MEJORAS: "Mejoras",
+  MIS_AVISOS: "Mis_Avisos",
 };
 
 // Opcional: escribe aquí un correo distinto si no quieres usar el del dueño del Google Sheet
@@ -34,6 +35,29 @@ var MEJORAS_HEADERS = [
   "Nota_Respuesta",
 ];
 
+var MIS_AVISOS_HEADERS = [
+  "Fingerprint",
+  "Operación",
+  "Barrio",
+  "Dirección",
+  "Zona",
+  "Estrato",
+  "Área (m²)",
+  "Hab",
+  "Baños",
+  "Garajes",
+  "Canon",
+  "Precio Venta",
+  "Admin",
+  "Etiquetas_Confort",
+  "Fuente",
+  "Enlaces",
+  "Fecha Detección",
+  "Estado_Visita",
+  "Notas_Personales",
+  "Checklist_Visita",
+];
+
 function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -46,6 +70,7 @@ function doGet(e) {
     var resumenBarrios = readSheetAsObjects_(ss, SHEET_NAMES.RESUMEN_ARRIENDOS, tz);
     var resumenBarriosVentas = readSheetAsObjects_(ss, SHEET_NAMES.RESUMEN_VENTAS, tz);
     var mejoras = readSheetAsObjects_(ss, SHEET_NAMES.MEJORAS, tz);
+    var misAvisos = readSheetAsObjects_(ss, SHEET_NAMES.MIS_AVISOS, tz);
 
     var lastUpdated = resolveLastUpdated_(arriendos, ventas, tz);
 
@@ -57,6 +82,7 @@ function doGet(e) {
     sheetsMap[SHEET_NAMES.RESUMEN_ARRIENDOS] = resumenBarrios;
     sheetsMap[SHEET_NAMES.RESUMEN_VENTAS] = resumenBarriosVentas;
     sheetsMap[SHEET_NAMES.MEJORAS] = mejoras;
+    sheetsMap[SHEET_NAMES.MIS_AVISOS] = misAvisos;
 
     var payload = {
       ok: true,
@@ -69,6 +95,7 @@ function doGet(e) {
       resumenBarrios: resumenBarrios,
       resumenBarriosVentas: resumenBarriosVentas,
       mejoras: mejoras,
+      misAvisos: misAvisos,
       sheets: sheetsMap,
     };
 
@@ -99,6 +126,12 @@ function doPost(e) {
     }
     if (action === "updateMejoraStatus") {
       return handleUpdateMejoraStatus_(body);
+    }
+    if (action === "saveManualListing") {
+      return handleSaveManualListing_(body);
+    }
+    if (action === "deleteManualListing") {
+      return handleDeleteManualListing_(body);
     }
 
     var requestedSheet = String(body.sheetName || SHEET_NAMES.ARRIENDOS).trim();
@@ -374,17 +407,106 @@ function handleUpdateMejoraStatus_(body) {
   return jsonResponse_({ ok: true, id: id, updatedRow: targetRow });
 }
 
-function getOrCreateMejorasSheet_(ss) {
-  var sheet = ss.getSheetByName(SHEET_NAMES.MEJORAS);
+function getOrCreateSheetWithHeaders_(ss, sheetName, headers) {
+  var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAMES.MEJORAS);
+    sheet = ss.insertSheet(sheetName);
   }
   if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, MEJORAS_HEADERS.length).setValues([MEJORAS_HEADERS]);
-    sheet.getRange(1, 1, 1, MEJORAS_HEADERS.length).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+function getOrCreateMejorasSheet_(ss) {
+  return getOrCreateSheetWithHeaders_(ss, SHEET_NAMES.MEJORAS, MEJORAS_HEADERS);
+}
+
+function handleSaveManualListing_(body) {
+  var item = body.listing || body;
+  var fp = String(item.fingerprint || "").trim();
+  if (!fp) {
+    return jsonResponse_({ ok: false, error: "El campo 'fingerprint' es obligatorio." });
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ss.getSpreadsheetTimeZone() || "America/Bogota";
+  var sheet = getOrCreateSheetWithHeaders_(ss, SHEET_NAMES.MIS_AVISOS, MIS_AVISOS_HEADERS);
+  var today = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+
+  var checklistPayload = item.checklistPayload || "";
+  if (checklistPayload && typeof checklistPayload !== "string") {
+    checklistPayload = JSON.stringify(checklistPayload);
+  }
+
+  var enlacesList = Array.isArray(item.enlaces) ? item.enlaces : [];
+  var rowValues = [
+    fp,
+    String(item.operacion || "arriendo"),
+    String(item.barrio || ""),
+    String(item.direccion || "Aviso propio"),
+    String(item.zona || "Oriental"),
+    Number(item.estrato || 4),
+    Number(item.area || 0),
+    Number(item.hab || 0),
+    Number(item.banos || 0),
+    Number(item.garajes || 0),
+    Number(item.canon || 0),
+    Number(item.precioVenta || 0),
+    Number(item.admin || 0),
+    Array.isArray(item.etiquetasConfort) ? item.etiquetasConfort.join(", ") : "",
+    String(item.fuente || "Aviso propio"),
+    enlacesList.join(" | "),
+    String(item.fechaDeteccion || today),
+    String(item.estadoVisita || ""),
+    String(item.notasPersonales || ""),
+    String(checklistPayload),
+  ];
+
+  var lastRow = sheet.getLastRow();
+  var targetRow = -1;
+  if (lastRow >= 2) {
+    var fps = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < fps.length; i++) {
+      if (String(fps[i][0] || "").trim() === fp) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (targetRow === -1) {
+    sheet.appendRow(rowValues);
+    targetRow = sheet.getLastRow();
+  } else {
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+  }
+
+  SpreadsheetApp.flush();
+  return jsonResponse_({ ok: true, fingerprint: fp, row: targetRow });
+}
+
+function handleDeleteManualListing_(body) {
+  var fp = String(body.fingerprint || "").trim();
+  if (!fp) {
+    return jsonResponse_({ ok: false, error: "El campo 'fingerprint' es obligatorio." });
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAMES.MIS_AVISOS);
+  if (!sheet || sheet.getLastRow() < 2) {
+    return jsonResponse_({ ok: true, deleted: false });
+  }
+  var fps = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+  for (var i = 0; i < fps.length; i++) {
+    if (String(fps[i][0] || "").trim() === fp) {
+      sheet.deleteRow(i + 2);
+      SpreadsheetApp.flush();
+      return jsonResponse_({ ok: true, deleted: true, fingerprint: fp });
+    }
+  }
+  return jsonResponse_({ ok: true, deleted: false });
 }
 
 function normalizeCellValue_(val, tz) {
@@ -424,6 +546,9 @@ function resolveSheetName_(name) {
   if (lower === "mejoras") {
     return SHEET_NAMES.MEJORAS;
   }
+  if (lower === "mis_avisos") {
+    return SHEET_NAMES.MIS_AVISOS;
+  }
   return name;
 }
 
@@ -443,4 +568,8 @@ function jsonResponse_(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function autorizarCorreo() {
+  Logger.log("Cuota diaria de correo: " + MailApp.getRemainingDailyQuota());
 }

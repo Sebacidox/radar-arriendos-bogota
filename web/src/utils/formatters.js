@@ -38,6 +38,55 @@ export function parseChecklist(raw) {
   return base;
 }
 
+/** Lee datos enriquecidos (_legalShield, _priceHistory, _meta) preservados en Checklist_Visita. */
+export function parseListingExtras(raw) {
+  const fallback = { legalShield: null, priceHistory: [], meta: {} };
+  if (!raw) return fallback;
+  let parsed = raw;
+  if (typeof raw !== 'object') {
+    try {
+      parsed = JSON.parse(String(raw));
+    } catch {
+      return fallback;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return fallback;
+
+  const legalShield =
+    parsed._legalShield && typeof parsed._legalShield === 'object'
+      ? { ...parsed._legalShield }
+      : null;
+  const priceHistory = Array.isArray(parsed._priceHistory)
+    ? parsed._priceHistory.filter(
+        (p) => p && typeof p === 'object' && Number.isFinite(Number(p.price))
+      )
+    : [];
+  const meta =
+    parsed._meta && typeof parsed._meta === 'object' ? { ...parsed._meta } : {};
+
+  return { legalShield, priceHistory, meta };
+}
+
+/** Combina los 5 checks presenciales y los extras del análisis en un único objeto para Google Sheets. */
+export function mergeChecklistAndExtras(checklist, extras = {}) {
+  const out = emptyChecklist();
+  if (checklist && typeof checklist === 'object') {
+    for (const item of CHECKLIST_ITEMS) {
+      out[item.key] = Boolean(checklist[item.key]);
+    }
+  }
+  if (extras?.legalShield && Object.keys(extras.legalShield).length > 0) {
+    out._legalShield = extras.legalShield;
+  }
+  if (Array.isArray(extras?.priceHistory) && extras.priceHistory.length > 0) {
+    out._priceHistory = extras.priceHistory;
+  }
+  if (extras?.meta && Object.keys(extras.meta).length > 0) {
+    out._meta = extras.meta;
+  }
+  return out;
+}
+
 export function formatCOP(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return '$0';
@@ -83,12 +132,16 @@ export function normalizeBarrioKey(barrio) {
     'colina suba': 'colina campestre',
     'suba mazuren': 'mazuren',
     'prado veraniego': 'prado veraniego norte',
+    'santa barbara': 'santa barbara norte',
+    'el chico': 'chico norte',
+    chico: 'chico norte',
+    rosales: 'los rosales',
+    salitre: 'ciudad salitre',
+    chapinero: 'chapinero alto',
+    floresta: 'la floresta',
   };
 
   if (aliases[text]) return aliases[text];
-  for (const [alias, canonical] of Object.entries(aliases)) {
-    if (text.includes(alias)) return canonical;
-  }
   for (const canonical of [
     'santa barbara norte',
     'contador',
@@ -101,8 +154,19 @@ export function normalizeBarrioKey(barrio) {
     'iberia',
     'colina campestre',
     'mazuren',
+    'chico norte',
+    'los rosales',
+    'ciudad salitre',
+    'chapinero alto',
+    'teusaquillo',
+    'normandia',
+    'la floresta',
+    'usaquen',
   ]) {
     if (text.includes(canonical)) return canonical;
+  }
+  for (const [alias, canonical] of Object.entries(aliases)) {
+    if (text.includes(alias)) return canonical;
   }
   return text;
 }

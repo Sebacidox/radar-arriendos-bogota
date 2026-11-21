@@ -15,8 +15,112 @@ import MapView from './components/MapView';
 import ReportsView from './components/ReportsView';
 import MejorasView from './components/MejorasView';
 import PropertyDetailModal from './components/PropertyDetailModal';
-import { fetchRadarData, submitMejora, updateListingInSheets } from './services/api';
-import { isListingUnavailable } from './utils/formatters';
+import DecisionCenterModal from './components/DecisionCenterModal';
+import ManualListingModal from './components/ManualListingModal';
+import {
+  deleteManualListingInSheets,
+  fetchRadarData,
+  loadLocalManualListings,
+  saveLocalManualListings,
+  saveManualListingInSheets,
+  submitMejora,
+  updateListingInSheets,
+} from './services/api';
+import {
+  isListingUnavailable,
+  mergeChecklistAndExtras,
+} from './utils/formatters';
+import { BARRIOS_DATA_META } from './utils/valuationEngine';
+
+function diffDaysFromIso(isoDate) {
+  if (!isoDate) return 0;
+  const parsed = Date.parse(String(isoDate).slice(0, 10));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor((Date.now() - parsed) / 86_400_000));
+}
+
+function enrichAndMergeData(raw) {
+  const histArrMap = new Map(
+    (raw.historicoCompleto || []).map((h) => [h.fingerprint, h])
+  );
+  const histVenMap = new Map(
+    (raw.historicoVentas || []).map((h) => [h.fingerprint, h])
+  );
+
+  const enrichItem = (item, histMap) => {
+    const hist = histMap.get(item.fingerprint);
+    const firstSeenAt = hist?.fechaPrimera || item.firstSeenAt || item.fechaDeteccion || '';
+    const dias = Math.max(
+      Number(item.diasEnMercado) || 0,
+      Number(hist?.diasEnMercado) || 0,
+      diffDaysFromIso(firstSeenAt)
+    );
+    let priceHistory = item.priceHistory || [];
+    const currentAsk = item.operacion === 'venta' ? item.precioVenta : item.canon;
+    if (priceHistory.length === 0 && hist && Number(hist.ahorroCop) > 0 && currentAsk > 0) {
+      priceHistory = [
+        {
+          date: firstSeenAt || item.fechaDeteccion,
+          price: currentAsk + Number(hist.ahorroCop),
+          admin: item.admin,
+          source: item.fuente || 'Radar',
+        },
+        {
+          date: hist.fechaUltima || item.fechaDeteccion,
+          price: currentAsk,
+          admin: item.admin,
+          source: item.fuente || 'Radar',
+        },
+      ];
+    }
+    return {
+      ...item,
+      origen: item.origen || 'radar',
+      firstSeenAt,
+      diasEnMercado: dias,
+      priceHistory,
+    };
+  };
+
+  const localManual = loadLocalManualListings();
+  const remoteManual = raw.misAvisos || [];
+  const mergedManualMap = new Map();
+  for (const item of remoteManual) {
+    mergedManualMap.set(item.fingerprint, item);
+  }
+  for (const localItem of localManual) {
+    const remote = mergedManualMap.get(localItem.fingerprint);
+    if (!remote) {
+      mergedManualMap.set(localItem.fingerprint, localItem);
+    } else {
+      mergedManualMap.set(localItem.fingerprint, {
+        ...remote,
+        fotos: remote.fotos?.length ? remote.fotos : localItem.fotos || [],
+        meta: { ...(localItem.meta || {}), ...(remote.meta || {}) },
+        priceHistory: remote.priceHistory?.length
+          ? remote.priceHistory
+          : localItem.priceHistory || [],
+        legalShield: remote.legalShield || localItem.legalShield || null,
+      });
+    }
+  }
+
+  const manualAll = Array.from(mergedManualMap.values());
+  const manualArr = manualAll.filter((m) => m.operacion !== 'venta');
+  const manualVen = manualAll.filter((m) => m.operacion === 'venta');
+
+  return {
+    ...raw,
+    arriendos: [
+      ...manualArr,
+      ...(raw.arriendos || []).map((item) => enrichItem(item, histArrMap)),
+    ],
+    ventas: [
+      ...manualVen,
+      ...(raw.ventas || []).map((item) => enrichItem(item, histVenMap)),
+    ],
+  };
+}
 
 function makeDefaultFilters() {
   return {
@@ -66,6 +170,8 @@ export default function App() {
   const [compareIds, setCompareIds] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [decisionListingId, setDecisionListingId] = useState('');
+  const [manualModalOpen, setManualModalOpen] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -90,7 +196,7 @@ export default function App() {
     setError('');
     try {
       const result = await fetchRadarData();
-      setData(result);
+      setData(enrichAndMergeData(result));
     } catch (err) {
       setError(err?.message || 'Error al cargar los datos de Google Sheets');
     } finally {
@@ -103,15 +209,29 @@ export default function App() {
   }, [loadData]);
 
   const patchLocalListing = useCallback((targetId, patch) => {
-    setData((prev) => ({
-      ...prev,
-      arriendos: prev.arriendos.map((item) =>
-        item.id === targetId ? { ...item, ...patch } : item
-      ),
-      ventas: prev.ventas.map((item) =>
-        item.id === targetId ? { ...item, ...patch } : item
-      ),
-    }));
+    setData((prev) => {
+      const mapFn = (item) => (item.id === targetId ? { ...item, ...patch } : item);
+      const nextArriendos = prev.arriendos.map(mapFn);
+      const nextVentas = prev.ventas.map(mapFn);
+      const updated = [...nextArriendos, ...nextVentas].find((x) => x.id === targetId);
+      if (updated?.origen === 'manual') {
+        const localAll = loadLocalManualListings();
+        const exists = localAll.some(
+          (m) => m.id === updated.id || m.fingerprint === updated.fingerprint
+        );
+        const nextLocal = exists
+          ? localAll.map((m) =>
+              m.id === updated.id || m.fingerprint === updated.fingerprint ? updated : m
+            )
+          : [updated, ...localAll];
+        saveLocalManualListings(nextLocal);
+      }
+      return {
+        ...prev,
+        arriendos: nextArriendos,
+        ventas: nextVentas,
+      };
+    });
   }, []);
 
   const handleSetEstadoVisita = useCallback(
@@ -128,8 +248,13 @@ export default function App() {
         const label = nextEstado ? `Marcado como "${nextEstado}"` : 'Estado limpiado';
         showToast(`${listing.barrio}: ${label}`, 'success');
       } catch (err) {
-        patchLocalListing(listing.id, { estadoVisita: prevEstado });
-        showToast(err?.message || 'Error guardando en Google Sheets', 'error');
+        if (listing.origen === 'manual') {
+          const label = nextEstado ? `Marcado como "${nextEstado}" (en este dispositivo)` : 'Estado limpiado';
+          showToast(`${listing.barrio}: ${label}`, 'success');
+        } else {
+          patchLocalListing(listing.id, { estadoVisita: prevEstado });
+          showToast(err?.message || 'Error guardando en Google Sheets', 'error');
+        }
       } finally {
         setSavingId('');
       }
@@ -141,6 +266,12 @@ export default function App() {
     async (listing, notasPersonales, checklistVisita) => {
       const prevNotas = listing.notasPersonales;
       const prevChecklist = listing.checklistVisita;
+      const serializedChecklist = mergeChecklistAndExtras(checklistVisita, {
+        legalShield: listing.legalShield,
+        priceHistory: listing.priceHistory,
+        meta: listing.meta,
+      });
+
       patchLocalListing(listing.id, { notasPersonales, checklistVisita });
       setSavingId(listing.id);
       try {
@@ -148,11 +279,15 @@ export default function App() {
           sheetName: listing.sheetName,
           fingerprint: listing.fingerprint,
           notasPersonales,
-          checklistVisita,
+          checklistVisita: serializedChecklist,
         });
         showToast(`Notas y checklist guardados en ${listing.barrio}`, 'success');
         return true;
       } catch (err) {
+        if (listing.origen === 'manual') {
+          showToast(`Notas guardadas localmente en ${listing.barrio}`, 'success');
+          return true;
+        }
         patchLocalListing(listing.id, {
           notasPersonales: prevNotas,
           checklistVisita: prevChecklist,
@@ -164,6 +299,115 @@ export default function App() {
       }
     },
     [patchLocalListing, showToast]
+  );
+
+  const handleSaveListingExtras = useCallback(
+    async (listing, nextExtras) => {
+      const patch = {
+        legalShield: nextExtras.legalShield,
+        priceHistory: nextExtras.priceHistory,
+        meta: nextExtras.meta,
+      };
+
+      const hist = nextExtras.priceHistory;
+      if (listing.origen === 'manual' && Array.isArray(hist) && hist.length > 0) {
+        const latestPrice = Number(hist[hist.length - 1]?.price) || 0;
+        if (latestPrice > 0) {
+          if (listing.operacion === 'venta') {
+            patch.precioVenta = latestPrice;
+            patch.totalMensual = latestPrice;
+            patch.costoM2 = listing.area > 0 ? Math.round(latestPrice / listing.area) : 0;
+          } else {
+            patch.canon = latestPrice;
+            patch.totalMensual = latestPrice + (listing.admin || 0);
+            patch.costoM2 = listing.area > 0 ? Math.round(patch.totalMensual / listing.area) : 0;
+          }
+        }
+      }
+
+      const prevState = {
+        legalShield: listing.legalShield,
+        priceHistory: listing.priceHistory,
+        meta: listing.meta,
+      };
+
+      patchLocalListing(listing.id, patch);
+      setSavingId(listing.id);
+      try {
+        const serialized = mergeChecklistAndExtras(listing.checklistVisita, nextExtras);
+        await updateListingInSheets({
+          sheetName: listing.sheetName,
+          fingerprint: listing.fingerprint,
+          checklistVisita: serialized,
+        });
+        showToast(`Análisis y escudo guardados en ${listing.barrio}`, 'success');
+        return true;
+      } catch (err) {
+        if (listing.origen === 'manual') {
+          showToast(`Ajustes guardados localmente en ${listing.barrio}`, 'success');
+          return true;
+        }
+        patchLocalListing(listing.id, prevState);
+        showToast(err?.message || 'No se pudieron guardar los cambios en Sheets', 'error');
+        return false;
+      } finally {
+        setSavingId('');
+      }
+    },
+    [patchLocalListing, showToast]
+  );
+
+  const handleAddManualListing = useCallback(
+    async (newListing) => {
+      const prevLocal = loadLocalManualListings();
+      saveLocalManualListings([newListing, ...prevLocal]);
+
+      setData((prev) => ({
+        ...prev,
+        arriendos:
+          newListing.operacion === 'venta'
+            ? prev.arriendos
+            : [newListing, ...prev.arriendos],
+        ventas:
+          newListing.operacion === 'venta' ? [newListing, ...prev.ventas] : prev.ventas,
+      }));
+
+      setManualModalOpen(false);
+      setActiveTab(newListing.operacion === 'venta' ? 'ventas' : 'arriendos');
+      setDecisionListingId(newListing.id);
+
+      try {
+        await saveManualListingInSheets(newListing);
+        showToast(`Aviso propio en ${newListing.barrio} guardado en Sheets`, 'success');
+      } catch {
+        showToast(`Aviso en ${newListing.barrio} evaluado y guardado en este dispositivo`, 'success');
+      }
+    },
+    [showToast]
+  );
+
+  const handleDeleteManualListing = useCallback(
+    async (listing) => {
+      const nextLocal = loadLocalManualListings().filter(
+        (m) => m.id !== listing.id && m.fingerprint !== listing.fingerprint
+      );
+      saveLocalManualListings(nextLocal);
+
+      setData((prev) => ({
+        ...prev,
+        arriendos: prev.arriendos.filter((x) => x.id !== listing.id),
+        ventas: prev.ventas.filter((x) => x.id !== listing.id),
+      }));
+      if (decisionListingId === listing.id) setDecisionListingId('');
+      showToast(`Aviso en ${listing.barrio} eliminado`, 'success');
+
+      try {
+        await deleteManualListingInSheets(listing.fingerprint);
+      } catch {
+        // Ignorar si Apps Script aún no tiene la acción deleteManualListing
+      }
+    },
+    [decisionListingId, showToast]
   );
 
   const handleToggleCompare = useCallback(
@@ -209,6 +453,11 @@ export default function App() {
   const allListings = useMemo(
     () => [...data.arriendos, ...data.ventas],
     [data.arriendos, data.ventas]
+  );
+
+  const decisionListing = useMemo(
+    () => allListings.find((item) => item.id === decisionListingId) || null,
+    [allListings, decisionListingId]
   );
 
   const compareItems = useMemo(
@@ -282,7 +531,11 @@ export default function App() {
           return a.area - b.area || b.score - a.score;
         case 'score_desc':
         default:
-          return b.score - a.score || getPrice(a) - getPrice(b);
+          return (
+            (b.origen === 'manual' ? 1 : 0) - (a.origen === 'manual' ? 1 : 0) ||
+            b.score - a.score ||
+            getPrice(a) - getPrice(b)
+          );
       }
     };
 
@@ -391,6 +644,7 @@ export default function App() {
               totalCount={currentList.filter((x) => !isListingUnavailable(x)).length}
               filteredCount={visibleListings.length}
               operacion={currentOp}
+              onOpenManualModal={() => setManualModalOpen(true)}
             />
 
             {visibleListings.length === 0 ? (
@@ -414,6 +668,8 @@ export default function App() {
                     isCompared={compareIds.includes(item.id)}
                     onToggleCompare={handleToggleCompare}
                     savingId={savingId}
+                    onOpenDecision={(x) => setDecisionListingId(x.id)}
+                    onDeleteManual={handleDeleteManualListing}
                   />
                 ))}
               </div>
@@ -445,6 +701,8 @@ export default function App() {
                         isCompared={compareIds.includes(item.id)}
                         onToggleCompare={handleToggleCompare}
                         savingId={savingId}
+                        onOpenDecision={(x) => setDecisionListingId(x.id)}
+                        onDeleteManual={handleDeleteManualListing}
                       />
                     ))}
                   </div>
@@ -478,6 +736,8 @@ export default function App() {
                         isCompared={compareIds.includes(item.id)}
                         onToggleCompare={handleToggleCompare}
                         savingId={savingId}
+                        onOpenDecision={(x) => setDecisionListingId(x.id)}
+                        onDeleteManual={handleDeleteManualListing}
                       />
                     ))}
                   </div>
@@ -491,6 +751,7 @@ export default function App() {
             onSaveVisitDetails={handleSaveVisitDetails}
             onSetEstadoVisita={handleSetEstadoVisita}
             savingId={savingId}
+            onOpenDecision={(x) => setDecisionListingId(x.id)}
           />
         ) : activeTab === 'mapa' ? (
           <MapView arriendos={data.arriendos} ventas={data.ventas} />
@@ -512,6 +773,10 @@ export default function App() {
         )}
       </main>
 
+      <footer className="no-print mx-auto max-w-7xl px-4 pb-8 pt-2 text-center text-[11px] text-stone-500 sm:px-6 lg:px-8">
+        {BARRIOS_DATA_META.attribution}
+      </footer>
+
       {compareOpen && (
         <CompareModal
           items={compareItems}
@@ -526,12 +791,38 @@ export default function App() {
         <PropertyDetailModal
           listing={selectedProperty}
           onClose={() => setSelectedProperty(null)}
+          onOpenDecision={(x) => setDecisionListingId(x.id)}
           onToggleFavorite={(listing, nextEstado) => {
             handleSetEstadoVisita(listing, nextEstado);
             setSelectedProperty((curr) =>
               curr ? { ...curr, estadoVisita: nextEstado } : null
             );
           }}
+        />
+      )}
+
+      {decisionListing && (
+        <DecisionCenterModal
+          listing={decisionListing}
+          resumenList={
+            decisionListing.operacion === 'venta'
+              ? data.resumenBarriosVentas
+              : data.resumenBarrios
+          }
+          allListings={
+            decisionListing.operacion === 'venta' ? data.ventas : data.arriendos
+          }
+          onClose={() => setDecisionListingId('')}
+          onSaveListingExtras={handleSaveListingExtras}
+          saving={savingId === decisionListing.id}
+        />
+      )}
+
+      {manualModalOpen && (
+        <ManualListingModal
+          defaultOperacion={currentOp}
+          onClose={() => setManualModalOpen(false)}
+          onSaveManualListing={handleAddManualListing}
         />
       )}
     </div>
