@@ -218,10 +218,11 @@ export const FAMILY_LOCATIONS = [
   {
     id: 'beatriz',
     name: 'Beatriz',
-    address: 'Dirección Beatriz: a definir',
-    lat: null,
-    lng: null,
-    defined: false,
+    address: 'Av. NQS con Calle 72 (estimada), Bogotá',
+    lat: 4.666094,
+    lng: -74.075093,
+    defined: true,
+    estimated: true,
   },
 ];
 

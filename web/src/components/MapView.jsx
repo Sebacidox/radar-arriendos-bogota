@@ -202,14 +202,14 @@ export default function MapView({ arriendos, ventas }) {
           <span className="h-3 w-3 rounded-full bg-stone-600" /> Puntaje &lt; 6.5 (Básica)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-purple-700" /> Puntos familiares (Gloria / Ángela)
+          <span className="h-3 w-3 rounded-full bg-purple-700" /> Puntos familiares (Gloria / Ángela / Beatriz)
         </span>
       </div>
 
       <div className="h-[560px] w-full overflow-hidden rounded-2xl border border-stoneLine bg-white shadow-sm">
         <MapContainer
-          center={[4.711, -74.048]}
-          zoom={13}
+          center={[4.696, -74.054]}
+          zoom={12}
           scrollWheelZoom
           className="h-full w-full"
         >
@@ -228,7 +228,7 @@ export default function MapView({ arriendos, ventas }) {
             }}
           />
 
-          {/* Pines fijos de Gloria y Ángela */}
+          {/* Pines fijos de Gloria, Ángela y Beatriz */}
           {definedFamily.map((fam) => {
             const famSv = buildStreetViewUrl(fam.lat, fam.lng);
             return (
@@ -241,7 +241,7 @@ export default function MapView({ arriendos, ventas }) {
                 <Popup maxWidth={240}>
                   <div className="space-y-1.5 p-0.5 text-xs text-ink">
                     <span className="inline-block rounded bg-purple-100 px-2 py-0.5 font-bold text-purple-900">
-                      Referencia familiar
+                      {fam.estimated ? 'Referencia familiar (estimada)' : 'Referencia familiar'}
                     </span>
                     <p className="font-serif text-sm font-bold text-ink">{fam.name}</p>
                     <p className="text-stone-600">{fam.address}</p>
