@@ -13,8 +13,9 @@ import CompareModal from './components/CompareModal';
 import FavoritesView from './components/FavoritesView';
 import MapView from './components/MapView';
 import ReportsView from './components/ReportsView';
+import MejorasView from './components/MejorasView';
 import PropertyDetailModal from './components/PropertyDetailModal';
-import { fetchRadarData, updateListingInSheets } from './services/api';
+import { fetchRadarData, submitMejora, updateListingInSheets } from './services/api';
 import { isListingUnavailable } from './utils/formatters';
 
 function makeDefaultFilters() {
@@ -41,6 +42,7 @@ export default function App() {
     resumenBarriosVentas: [],
     historicoCompleto: [],
     historicoVentas: [],
+    mejoras: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -180,6 +182,30 @@ export default function App() {
     [showToast]
   );
 
+  const handleSubmitMejora = useCallback(
+    async ({ autor, tipo, seccion, descripcion }) => {
+      const result = await submitMejora({ autor, tipo, seccion, descripcion });
+      if (result?.mejora?.descripcion) {
+        setData((prev) => ({
+          ...prev,
+          mejoras: [result.mejora, ...(prev.mejoras || [])],
+        }));
+      }
+      showToast('Mejora enviada correctamente', 'success');
+      return result;
+    },
+    [showToast]
+  );
+
+  const pendingMejorasCount = useMemo(
+    () =>
+      (data.mejoras || []).filter((m) => {
+        const est = String(m.estado || 'Pendiente').toLowerCase();
+        return est !== 'resuelto' && est !== 'resuelta' && est !== 'listo';
+      }).length,
+    [data.mejoras]
+  );
+
   const allListings = useMemo(
     () => [...data.arriendos, ...data.ventas],
     [data.arriendos, data.ventas]
@@ -283,6 +309,7 @@ export default function App() {
         largeText={largeText}
         onToggleLargeText={() => setLargeText((v) => !v)}
         favoritesCount={favorites.length}
+        pendingMejorasCount={pendingMejorasCount}
       />
 
       {/* Toast flotante */}
@@ -467,7 +494,7 @@ export default function App() {
           />
         ) : activeTab === 'mapa' ? (
           <MapView arriendos={data.arriendos} ventas={data.ventas} />
-        ) : (
+        ) : activeTab === 'informes' ? (
           <ReportsView
             arriendos={data.arriendos}
             ventas={data.ventas}
@@ -476,6 +503,11 @@ export default function App() {
             historicoCompleto={data.historicoCompleto}
             historicoVentas={data.historicoVentas}
             onSelectProperty={setSelectedProperty}
+          />
+        ) : (
+          <MejorasView
+            mejoras={data.mejoras}
+            onSubmitMejora={handleSubmitMejora}
           />
         )}
       </main>

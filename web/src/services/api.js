@@ -161,6 +161,19 @@ function normalizeHistoricoRow(row, operacion) {
   };
 }
 
+function normalizeMejoraRow(row) {
+  return {
+    id: String(row['ID'] || '').trim(),
+    fecha: String(row['Fecha'] || '').trim(),
+    autor: String(row['Autor'] || 'Familia').trim(),
+    tipo: String(row['Tipo'] || 'Idea').trim(),
+    seccion: String(row['Sección'] || 'General').trim(),
+    descripcion: String(row['Descripción'] || '').trim(),
+    estado: String(row['Estado'] || 'Pendiente').trim(),
+    notaRespuesta: String(row['Nota_Respuesta'] || '').trim(),
+  };
+}
+
 export async function fetchRadarData() {
   const response = await fetch(APPS_SCRIPT_URL, {
     method: 'GET',
@@ -187,6 +200,10 @@ export async function fetchRadarData() {
   const ventas = (data.ventas || []).map((row) =>
     normalizeListingRow(row, 'venta', sheetNames.VENTAS || 'Top semana ventas')
   );
+  const mejoras = (data.mejoras || [])
+    .map(normalizeMejoraRow)
+    .filter((m) => m.descripcion)
+    .reverse();
 
   return {
     lastUpdated: String(data.lastUpdated || '').trim(),
@@ -203,7 +220,36 @@ export async function fetchRadarData() {
     historicoVentas: (data.historicoVentas || []).map((r) =>
       normalizeHistoricoRow(r, 'venta')
     ),
+    mejoras,
   };
+}
+
+async function postToAppsScript(payload, fallbackError) {
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`${fallbackError} (HTTP ${response.status})`);
+  }
+
+  const result = await response.json();
+  if (!result || result.ok === false) {
+    const errMsg = result?.error || 'Google Apps Script rechazó la actualización';
+    if (payload.action === 'submitMejora' && errMsg.includes('fingerprint')) {
+      throw new Error(
+        'Falta actualizar la nueva versión de Code.gs en Google Apps Script para activar el buzón de Mejoras.'
+      );
+    }
+    throw new Error(errMsg);
+  }
+
+  return result;
 }
 
 export async function updateListingInSheets({
@@ -221,23 +267,24 @@ export async function updateListingInSheets({
   if (notasPersonales !== undefined) payload.notasPersonales = notasPersonales;
   if (checklistVisita !== undefined) payload.checklistVisita = checklistVisita;
 
-  const response = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8',
+  return postToAppsScript(payload, 'No se pudo guardar en Google Sheets');
+}
+
+export async function submitMejora({ autor, tipo, seccion, descripcion }) {
+  const result = await postToAppsScript(
+    {
+      action: 'submitMejora',
+      autor,
+      tipo,
+      seccion,
+      descripcion,
     },
-    body: JSON.stringify(payload),
-  });
+    'No se pudo enviar la mejora a Google Sheets'
+  );
 
-  if (!response.ok) {
-    throw new Error(`No se pudo guardar en Google Sheets (HTTP ${response.status})`);
-  }
-
-  const result = await response.json();
-  if (!result || result.ok === false) {
-    throw new Error(result?.error || 'Google Apps Script rechazó la actualización');
-  }
-
-  return result;
+  return {
+    emailSent: Boolean(result.emailSent),
+    emailWarning: String(result.emailWarning || '').trim(),
+    mejora: normalizeMejoraRow(result.mejora || {}),
+  };
 }

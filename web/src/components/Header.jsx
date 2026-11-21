@@ -5,6 +5,7 @@ import {
   Home,
   MapPin,
   BarChart3,
+  MessageSquarePlus,
   RefreshCw,
 } from 'lucide-react';
 
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'favoritos', label: 'Favoritos', icon: Heart },
   { id: 'mapa', label: 'Mapa', icon: MapPin },
   { id: 'informes', label: 'Informes', icon: BarChart3 },
+  { id: 'mejoras', label: 'Mejoras', icon: MessageSquarePlus },
 ];
 
 export default function Header({
@@ -25,6 +27,7 @@ export default function Header({
   largeText,
   onToggleLargeText,
   favoritesCount,
+  pendingMejorasCount = 0,
 }) {
   return (
     <header className="no-print sticky top-0 z-30 border-b border-stoneLine bg-ivory/95 backdrop-blur">
@@ -104,6 +107,17 @@ export default function Header({
                     }`}
                   >
                     {favoritesCount}
+                  </span>
+                )}
+                {tab.id === 'mejoras' && pendingMejorasCount > 0 && (
+                  <span
+                    className={`ml-0.5 rounded-full px-2 py-0.5 text-xs font-bold ${
+                      active
+                        ? 'bg-white/20 text-white'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {pendingMejorasCount}
                   </span>
                 )}
               </button>
