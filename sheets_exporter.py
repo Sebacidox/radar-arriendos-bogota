@@ -550,6 +550,15 @@ def _build_sheet_styling_requests(
                     bold=False,
                 )
             )
+            requests.append(
+                _cond_rule(
+                    sheet_id, 1, num_rows, c, c + 1,
+                    "TEXT_CONTAINS", ["NO DISPONIBLE"],
+                    bg={"red": 0.996, "green": 0.886, "blue": 0.886},
+                    fg={"red": 0.600, "green": 0.106, "blue": 0.106},
+                    bold=True,
+                )
+            )
 
         for col_name in ("Cocina Abierta", "Balcón"):
             if col_name in headers:
@@ -895,6 +904,72 @@ def _build_resumen_rows(active_listings: list[EvaluatedListing], operacion: str)
     return rows
 
 
+def _record_to_evaluated(rec: dict, operacion: str) -> EvaluatedListing:
+    links = [tuple(x) for x in (rec.get("portales_enlaces") or [])]
+    return EvaluatedListing(
+        fingerprint=rec["fingerprint"],
+        portal=links[0][0] if links else "",
+        url=links[0][1] if links else "",
+        titulo=rec.get("titulo") or "",
+        descripcion=rec.get("descripcion") or "",
+        barrio=rec.get("barrio") or "",
+        barrio_normalizado=rec.get("barrio_normalizado") or "",
+        zona=rec.get("zona") or "Oriental",
+        latitud=rec.get("latitud"),
+        longitud=rec.get("longitud"),
+        area=float(rec.get("area") or 0),
+        habitaciones=int(rec.get("habitaciones") or 0),
+        banos=int(rec.get("banos") or 0),
+        parqueaderos=int(rec.get("parqueaderos") or 0),
+        estrato=int(rec.get("estrato") or 4),
+        canon=int(rec.get("canon") or 0),
+        administracion=int(rec.get("administracion") or 0),
+        costo_total=int(rec.get("costo_total") or 0),
+        admin_estimada_flag=bool(rec.get("admin_estimada_flag")),
+        cocina_abierta=bool(rec.get("cocina_abierta")),
+        balcon=bool(rec.get("balcon")),
+        costo_m2=float(rec.get("costo_m2") or 0),
+        score=float(rec.get("score") or 0),
+        estado=rec.get("estado") or "NO DISPONIBLE",
+        ahorro_cop=int(rec.get("ahorro_cop") or 0),
+        portales_enlaces=links,
+        fecha_primera_deteccion=rec.get("fecha_primera_deteccion") or "",
+        fecha_ultima_deteccion=rec.get("fecha_ultima_deteccion") or "",
+        direccion=rec.get("direccion") or "",
+        operacion=rec.get("operacion") or operacion,
+        precio_venta=int(rec.get("precio_venta") or 0),
+        tiene_ascensor=True,
+        fotos=(rec.get("fotos") or [])[:5],
+        antiguedad=rec.get("antiguedad") or "",
+        dias_en_mercado=int(rec.get("dias_en_mercado") or 0),
+        etiquetas_confort=rec.get("etiquetas_confort") or "",
+    )
+
+
+def _append_unavailable_favorites(
+    active_listings: list[EvaluatedListing],
+    full_history: list[dict],
+    manual_notes: dict[str, tuple[str, str, str]],
+    operacion: str,
+) -> list[EvaluatedListing]:
+    """Conserva favoritos marcados aunque ya no estén activos, mostrando su estado NO DISPONIBLE."""
+    active_fps = {item.fingerprint for item in active_listings}
+    history_by_fp = {rec["fingerprint"]: rec for rec in full_history}
+    merged = list(active_listings)
+
+    for fp, (estado_visita, _, _) in manual_notes.items():
+        if estado_visita not in ("Nos gusta", "Agendar visita"):
+            continue
+        if fp in active_fps:
+            continue
+        rec = history_by_fp.get(fp)
+        if not rec:
+            continue
+        merged.append(_record_to_evaluated(rec, operacion))
+
+    return merged
+
+
 def export_to_sheets(
     active_arriendos: list[EvaluatedListing],
     history_arriendos: list[dict],
@@ -914,21 +989,27 @@ def export_to_sheets(
     # Preparar hojas y preservar apuntes manuales en Top_Semana y Top semana ventas
     ws_top_arr = _get_or_create_worksheet(spreadsheet, SHEET_TOP_SEMANA, rows=500, cols=len(TOP_SEMANA_HEADERS))
     notes_arr = _read_manual_notes(ws_top_arr)
+    top_arr_listings = _append_unavailable_favorites(
+        active_arriendos, history_arriendos, notes_arr, "arriendo"
+    )
 
     ws_hist_arr = _get_or_create_worksheet(spreadsheet, SHEET_HISTORICO, rows=2000, cols=len(HISTORICO_ARRIENDOS_HEADERS))
     ws_res_arr = _get_or_create_worksheet(spreadsheet, SHEET_RESUMEN_BARRIOS, rows=60, cols=26)
 
     ws_top_vta = _get_or_create_worksheet(spreadsheet, SHEET_TOP_VENTAS, rows=500, cols=len(TOP_VENTAS_HEADERS))
     notes_vta = _read_manual_notes(ws_top_vta)
+    top_vta_listings = _append_unavailable_favorites(
+        active_ventas, history_ventas, notes_vta, "venta"
+    )
 
     ws_hist_vta = _get_or_create_worksheet(spreadsheet, SHEET_HISTORICO_VENTAS, rows=2000, cols=len(HISTORICO_VENTAS_HEADERS))
     ws_res_vta = _get_or_create_worksheet(spreadsheet, SHEET_RESUMEN_BARRIOS_VENTAS, rows=60, cols=26)
 
     tables = [
-        (ws_top_arr, _build_top_rows(active_arriendos, notes_arr, "arriendo"), THEME_ARRIENDO, None),
+        (ws_top_arr, _build_top_rows(top_arr_listings, notes_arr, "arriendo"), THEME_ARRIENDO, None),
         (ws_hist_arr, _build_historico_rows(history_arriendos, "arriendo"), THEME_ARRIENDO, None),
         (ws_res_arr, _build_resumen_rows(active_arriendos, "arriendo"), THEME_ARRIENDO, "arriendo"),
-        (ws_top_vta, _build_top_rows(active_ventas, notes_vta, "venta"), THEME_VENTA, None),
+        (ws_top_vta, _build_top_rows(top_vta_listings, notes_vta, "venta"), THEME_VENTA, None),
         (ws_hist_vta, _build_historico_rows(history_ventas, "venta"), THEME_VENTA, None),
         (ws_res_vta, _build_resumen_rows(active_ventas, "venta"), THEME_VENTA, "venta"),
     ]

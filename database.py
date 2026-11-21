@@ -11,6 +11,8 @@ from typing import Optional
 from config import DB_PATH
 from models import EvaluatedListing
 from scoring import calculate_score
+from scrapers.availability import check_listing_availability
+from scrapers.base import build_session
 
 
 def _compute_days_in_market(first_date_str: str, ref_date_str: str) -> int:
@@ -204,6 +206,7 @@ class DatabaseManager:
         portal_summary: dict[str, dict],
         run_timestamp: Optional[str] = None,
         operacion: str = "arriendo",
+        verify_missing_urls: bool = True,
     ) -> list[EvaluatedListing]:
         """Actualiza el estado semanal, historial de precios y retorna los activos clasificados."""
         now_str = run_timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -438,17 +441,95 @@ class DatabaseManager:
 
                 processed_active.append(item)
 
-            # Marcar NO DETECTADO los que estaban activos antes pero ya no aparecieron
+            # Verificar disponibilidad real de los que estaban activos y no aparecieron en búsqueda
+            verify_session = build_session() if verify_missing_urls else None
             for fp, prev in existing_rows.items():
                 if fp not in active_fingerprints and prev["activo"] == 1:
-                    conn.execute(
-                        """
-                        UPDATE inmuebles
-                        SET estado = 'NO DETECTADO', activo = 0
-                        WHERE fingerprint = ?
-                        """,
-                        (fp,),
-                    )
+                    if verify_missing_urls:
+                        prev_links = [
+                            tuple(x) for x in json.loads(prev["portales_enlaces_json"])
+                        ]
+                        availability = check_listing_availability(
+                            prev_links, session=verify_session
+                        )
+                    else:
+                        availability = "UNKNOWN"
+
+                    if availability == "AVAILABLE":
+                        conn.execute(
+                            """
+                            UPDATE inmuebles
+                            SET estado = 'SIGUE DISPONIBLE',
+                                fecha_ultima_deteccion = ?,
+                                activo = 1
+                            WHERE fingerprint = ?
+                            """,
+                            (today_str, fp),
+                        )
+                        prev_links = [
+                            tuple(x) for x in json.loads(prev["portales_enlaces_json"])
+                        ]
+                        prev_fotos = json.loads(prev.get("fotos_json") or "[]")
+                        processed_active.append(
+                            EvaluatedListing(
+                                fingerprint=fp,
+                                portal=prev_links[0][0] if prev_links else "",
+                                url=prev_links[0][1] if prev_links else "",
+                                titulo=prev["titulo"],
+                                descripcion=prev["descripcion"],
+                                barrio=prev["barrio"],
+                                barrio_normalizado=prev["barrio_normalizado"],
+                                zona=prev["zona"],
+                                latitud=prev["latitud"],
+                                longitud=prev["longitud"],
+                                area=float(prev["area"]),
+                                habitaciones=int(prev["habitaciones"]),
+                                banos=int(prev["banos"]),
+                                parqueaderos=int(prev["parqueaderos"]),
+                                estrato=int(prev["estrato"]),
+                                canon=int(prev["canon"]),
+                                administracion=int(prev["administracion"]),
+                                costo_total=int(prev["costo_total"]),
+                                admin_estimada_flag=bool(prev["admin_estimada_flag"]),
+                                cocina_abierta=bool(prev["cocina_abierta"]),
+                                balcon=bool(prev["balcon"]),
+                                costo_m2=float(prev["costo_m2"]),
+                                score=float(prev["score"]),
+                                estado="SIGUE DISPONIBLE",
+                                ahorro_cop=int(prev["ahorro_cop"]),
+                                portales_enlaces=prev_links,
+                                fecha_primera_deteccion=prev["fecha_primera_deteccion"],
+                                fecha_ultima_deteccion=today_str,
+                                direccion=prev.get("direccion") or "",
+                                operacion=prev.get("operacion") or operacion,
+                                precio_venta=int(prev.get("precio_venta") or 0),
+                                tiene_ascensor=True,
+                                fotos=prev_fotos[:5],
+                                antiguedad=prev.get("antiguedad") or "",
+                                dias_en_mercado=_compute_days_in_market(
+                                    prev["fecha_primera_deteccion"], today_str
+                                ),
+                                etiquetas_confort=prev.get("etiquetas_confort") or "",
+                            )
+                        )
+                    elif availability == "UNAVAILABLE":
+                        conn.execute(
+                            """
+                            UPDATE inmuebles
+                            SET estado = 'NO DISPONIBLE', activo = 0
+                            WHERE fingerprint = ?
+                            """,
+                            (fp,),
+                        )
+                    else:
+                        conn.execute(
+                            """
+                            UPDATE inmuebles
+                            SET estado = 'NO DETECTADO', activo = 0
+                            WHERE fingerprint = ?
+                            """,
+                            (fp,),
+                        )
 
             conn.execute(
                 """

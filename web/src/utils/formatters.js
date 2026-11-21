@@ -197,3 +197,59 @@ export function buildWhatsAppUrl(listing) {
     .join('\n');
   return `https://wa.me/?text=${encodeURIComponent(msg)}`;
 }
+
+export const FAMILY_LOCATIONS = [
+  {
+    id: 'gloria',
+    name: 'Gloria',
+    address: 'Calle 146 #11-25, Bogotá',
+    lat: 4.72495,
+    lng: -74.03345,
+    defined: true,
+  },
+  {
+    id: 'angela',
+    name: 'Ángela',
+    address: 'Carrera 23 #118-31, Bogotá',
+    lat: 4.700921,
+    lng: -74.053909,
+    defined: true,
+  },
+  {
+    id: 'beatriz',
+    name: 'Beatriz',
+    address: 'Dirección Beatriz: a definir',
+    lat: null,
+    lng: null,
+    defined: false,
+  },
+];
+
+export function haversineKm(lat1, lng1, lat2, lng2) {
+  if (
+    lat1 === null ||
+    lng1 === null ||
+    lat2 === null ||
+    lng2 === null ||
+    !Number.isFinite(lat1) ||
+    !Number.isFinite(lng1) ||
+    !Number.isFinite(lat2) ||
+    !Number.isFinite(lng2)
+  ) {
+    return null;
+  }
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(1));
+}
+
+export function isListingUnavailable(listing) {
+  const est = String(listing?.estado || '').toUpperCase();
+  return est.includes('NO DISPONIBLE') || est.includes('NO DETECTADO');
+}

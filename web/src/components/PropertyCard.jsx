@@ -24,6 +24,7 @@ import {
   estimateUtilitiesByStratum,
   formatCOP,
   getScoreDescriptor,
+  isListingUnavailable,
 } from '../utils/formatters';
 
 export default function PropertyCard({
@@ -49,6 +50,7 @@ export default function PropertyCard({
   const isLiked = listing.estadoVisita === 'Nos gusta';
   const isScheduled = listing.estadoVisita === 'Agendar visita';
   const isDiscarded = listing.estadoVisita === 'Descartado';
+  const isUnavailable = isListingUnavailable(listing);
   const isBusy = savingId === listing.id;
 
   const hasMainRoadAlert = listing.etiquetasConfort.some((t) =>
@@ -116,6 +118,13 @@ export default function PropertyCard({
             </p>
           </div>
         </div>
+
+        {/* Alerta de no disponibilidad confirmada */}
+        {isUnavailable && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+            Este apartamento ya no figura disponible en el portal.
+          </div>
+        )}
 
         {/* Sello de oportunidad */}
         <div

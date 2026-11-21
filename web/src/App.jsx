@@ -15,14 +15,21 @@ import MapView from './components/MapView';
 import ReportsView from './components/ReportsView';
 import PropertyDetailModal from './components/PropertyDetailModal';
 import { fetchRadarData, updateListingInSheets } from './services/api';
+import { isListingUnavailable } from './utils/formatters';
 
-const DEFAULT_FILTERS = {
-  search: '',
-  onlyNew: false,
-  onlyOriental: false,
-  onlyBalcon: false,
-  onlyOpenKitchen: false,
-};
+function makeDefaultFilters() {
+  return {
+    search: '',
+    onlyNew: false,
+    onlyOriental: false,
+    onlyBalcon: false,
+    onlyOpenKitchen: false,
+    sortBy: 'score_desc',
+    maxPrice: '',
+    minArea: '',
+    minScore: '',
+  };
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('arriendos');
@@ -48,8 +55,12 @@ export default function App() {
     }
   });
 
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [filtersByOp, setFiltersByOp] = useState({
+    arriendo: makeDefaultFilters(),
+    venta: makeDefaultFilters(),
+  });
   const [showDiscarded, setShowDiscarded] = useState(false);
+  const [showUnavailable, setShowUnavailable] = useState(false);
   const [compareIds, setCompareIds] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState(null);
@@ -189,19 +200,40 @@ export default function App() {
   );
 
   const currentOp = activeTab === 'ventas' ? 'venta' : 'arriendo';
+  const currentFilters = filtersByOp[currentOp];
+  const setCurrentFilters = useCallback(
+    (nextFilters) => {
+      setFiltersByOp((prev) => ({ ...prev, [currentOp]: nextFilters }));
+    },
+    [currentOp]
+  );
+  const resetCurrentFilters = useCallback(() => {
+    setFiltersByOp((prev) => ({ ...prev, [currentOp]: makeDefaultFilters() }));
+  }, [currentOp]);
+
   const currentList = activeTab === 'ventas' ? data.ventas : data.arriendos;
   const currentResumen =
     activeTab === 'ventas' ? data.resumenBarriosVentas : data.resumenBarrios;
 
-  const { visibleListings, discardedListings } = useMemo(() => {
-    const q = filters.search.trim().toLowerCase();
+  const { visibleListings, unavailableListings, discardedListings } = useMemo(() => {
+    const q = currentFilters.search.trim().toLowerCase();
+    const maxP = currentFilters.maxPrice !== '' ? Number(currentFilters.maxPrice) : null;
+    const minA = currentFilters.minArea !== '' ? Number(currentFilters.minArea) : null;
+    const minS = currentFilters.minScore !== '' ? Number(currentFilters.minScore) : null;
+
     const matchesFilters = (item) => {
-      if (filters.onlyNew && !item.estado.toUpperCase().startsWith('NUEVO')) {
+      if (currentFilters.onlyNew && !item.estado.toUpperCase().startsWith('NUEVO')) {
         return false;
       }
-      if (filters.onlyOriental && item.zona !== 'Oriental') return false;
-      if (filters.onlyBalcon && !item.balcon) return false;
-      if (filters.onlyOpenKitchen && !item.cocinaAbierta) return false;
+      if (currentFilters.onlyOriental && item.zona !== 'Oriental') return false;
+      if (currentFilters.onlyBalcon && !item.balcon) return false;
+      if (currentFilters.onlyOpenKitchen && !item.cocinaAbierta) return false;
+
+      const priceVal = item.operacion === 'venta' ? item.precioVenta : item.totalMensual;
+      if (maxP !== null && priceVal > maxP) return false;
+      if (minA !== null && item.area < minA) return false;
+      if (minS !== null && item.score < minS) return false;
+
       if (q) {
         const hay = `${item.barrio} ${item.direccion} ${item.zona}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -209,12 +241,36 @@ export default function App() {
       return true;
     };
 
-    const filtered = currentList.filter(matchesFilters);
+    const getPrice = (x) => (x.operacion === 'venta' ? x.precioVenta : x.totalMensual);
+    const sortFn = (a, b) => {
+      switch (currentFilters.sortBy) {
+        case 'score_asc':
+          return a.score - b.score || getPrice(a) - getPrice(b);
+        case 'price_asc':
+          return getPrice(a) - getPrice(b) || b.score - a.score;
+        case 'price_desc':
+          return getPrice(b) - getPrice(a) || b.score - a.score;
+        case 'area_desc':
+          return b.area - a.area || b.score - a.score;
+        case 'area_asc':
+          return a.area - b.area || b.score - a.score;
+        case 'score_desc':
+        default:
+          return b.score - a.score || getPrice(a) - getPrice(b);
+      }
+    };
+
+    const filtered = currentList.filter(matchesFilters).sort(sortFn);
     return {
-      visibleListings: filtered.filter((x) => x.estadoVisita !== 'Descartado'),
+      visibleListings: filtered.filter(
+        (x) => x.estadoVisita !== 'Descartado' && !isListingUnavailable(x)
+      ),
+      unavailableListings: filtered.filter(
+        (x) => x.estadoVisita !== 'Descartado' && isListingUnavailable(x)
+      ),
       discardedListings: filtered.filter((x) => x.estadoVisita === 'Descartado'),
     };
-  }, [currentList, filters]);
+  }, [currentList, currentFilters]);
 
   return (
     <div className="min-h-screen bg-ivory text-ink">
@@ -302,9 +358,10 @@ export default function App() {
         ) : activeTab === 'arriendos' || activeTab === 'ventas' ? (
           <>
             <FilterBar
-              filters={filters}
-              onChange={setFilters}
-              totalCount={currentList.length}
+              filters={currentFilters}
+              onChange={setCurrentFilters}
+              onReset={resetCurrentFilters}
+              totalCount={currentList.filter((x) => !isListingUnavailable(x)).length}
               filteredCount={visibleListings.length}
               operacion={currentOp}
             />
@@ -333,6 +390,39 @@ export default function App() {
                   />
                 ))}
               </div>
+            )}
+
+            {unavailableListings.length > 0 && (
+              <section className="mt-8 rounded-2xl border border-red-200 bg-red-50/40 p-4">
+                <button
+                  type="button"
+                  onClick={() => setShowUnavailable((v) => !v)}
+                  className="flex w-full items-center justify-between text-left text-sm font-semibold text-red-800 hover:text-red-900"
+                >
+                  <span>Ya no disponibles en el portal ({unavailableListings.length})</span>
+                  {showUnavailable ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+                {showUnavailable && (
+                  <div className="mt-4 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {unavailableListings.map((item) => (
+                      <PropertyCard
+                        key={item.id}
+                        listing={item}
+                        resumenList={currentResumen}
+                        allListings={currentList}
+                        onSetEstadoVisita={handleSetEstadoVisita}
+                        isCompared={compareIds.includes(item.id)}
+                        onToggleCompare={handleToggleCompare}
+                        savingId={savingId}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
 
             {discardedListings.length > 0 && (

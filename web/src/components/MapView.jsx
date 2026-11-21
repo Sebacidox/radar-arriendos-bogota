@@ -1,8 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-import { ExternalLink, Eye } from 'lucide-react';
-import { buildStreetViewUrl, formatCOP } from '../utils/formatters';
+import { ExternalLink, Eye, Home, HelpCircle } from 'lucide-react';
+import {
+  FAMILY_LOCATIONS,
+  buildStreetViewUrl,
+  formatCOP,
+  haversineKm,
+  isListingUnavailable,
+} from '../utils/formatters';
 
 const AUTO_NORTE_LINE = [
   [4.6835, -74.0485],
@@ -42,25 +48,84 @@ function createScorePin(score, operacion) {
   });
 }
 
+function createFamilyPin(name) {
+  const html = `
+    <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-85%);">
+      <div style="
+        background:#6D28D9;
+        color:#FFFFFF;
+        border:2px solid #FFFFFF;
+        border-radius:9999px;
+        padding:3px 9px;
+        font-size:11px;
+        font-weight:700;
+        white-space:nowrap;
+        box-shadow:0 4px 12px rgba(109,40,217,0.4);
+        font-family:'Plus Jakarta Sans',sans-serif;
+      ">★ ${name}</div>
+      <div style="
+        width:10px;
+        height:10px;
+        background:#6D28D9;
+        border:2px solid #FFFFFF;
+        border-radius:9999px;
+        margin-top:2px;
+        box-shadow:0 2px 6px rgba(0,0,0,0.28);
+      "></div>
+    </div>
+  `;
+  return L.divIcon({
+    html,
+    className: 'custom-radar-pin',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+    popupAnchor: [0, -34],
+  });
+}
+
 export default function MapView({ arriendos, ventas }) {
   const [mode, setMode] = useState('todos');
+
+  const activeArriendos = useMemo(
+    () =>
+      arriendos.filter(
+        (item) => item.estadoVisita !== 'Descartado' && !isListingUnavailable(item)
+      ),
+    [arriendos]
+  );
+
+  const activeVentas = useMemo(
+    () =>
+      ventas.filter(
+        (item) => item.estadoVisita !== 'Descartado' && !isListingUnavailable(item)
+      ),
+    [ventas]
+  );
 
   const markers = useMemo(() => {
     const pool =
       mode === 'arriendos'
-        ? arriendos
+        ? activeArriendos
         : mode === 'ventas'
-          ? ventas
-          : [...arriendos, ...ventas];
+          ? activeVentas
+          : [...activeArriendos, ...activeVentas];
     return pool.filter(
       (item) =>
-        item.estadoVisita !== 'Descartado' &&
         item.lat !== null &&
         item.lng !== null &&
         Number.isFinite(item.lat) &&
         Number.isFinite(item.lng)
     );
-  }, [arriendos, ventas, mode]);
+  }, [activeArriendos, activeVentas, mode]);
+
+  const definedFamily = useMemo(
+    () => FAMILY_LOCATIONS.filter((loc) => loc.defined),
+    []
+  );
+  const beatrizLoc = useMemo(
+    () => FAMILY_LOCATIONS.find((loc) => !loc.defined),
+    []
+  );
 
   return (
     <div className="space-y-4">
@@ -77,9 +142,12 @@ export default function MapView({ arriendos, ventas }) {
 
         <div className="flex flex-wrap items-center gap-2">
           {[
-            { id: 'todos', label: `Todos (${arriendos.length + ventas.length})` },
-            { id: 'arriendos', label: `Arriendos (${arriendos.length})` },
-            { id: 'ventas', label: `Ventas (${ventas.length})` },
+            {
+              id: 'todos',
+              label: `Todos (${activeArriendos.length + activeVentas.length})`,
+            },
+            { id: 'arriendos', label: `Arriendos (${activeArriendos.length})` },
+            { id: 'ventas', label: `Ventas (${activeVentas.length})` },
           ].map((opt) => (
             <button
               key={opt.id}
@@ -97,6 +165,32 @@ export default function MapView({ arriendos, ventas }) {
         </div>
       </div>
 
+      {/* Ubicaciones fijas de la familia */}
+      <div className="rounded-2xl border border-purple-200 bg-white p-4 shadow-sm">
+        <p className="mb-2.5 text-xs font-bold uppercase tracking-wider text-purple-900">
+          Ubicaciones fijas de referencia familiar
+        </p>
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          {definedFamily.map((fam) => (
+            <span
+              key={fam.id}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-3 py-1.5 font-semibold text-purple-900"
+            >
+              <Home className="h-3.5 w-3.5 text-purple-700" />
+              <span>
+                {fam.name}: {fam.address.replace(', Bogotá', '')}
+              </span>
+            </span>
+          ))}
+          {beatrizLoc && (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-1.5 font-semibold text-amberWarm">
+              <HelpCircle className="h-3.5 w-3.5" />
+              <span>{beatrizLoc.address}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-stone-600">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-full bg-sage" /> Puntaje 8.5 – 10 (Excelente)
@@ -106,6 +200,9 @@ export default function MapView({ arriendos, ventas }) {
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-full bg-stone-600" /> Puntaje &lt; 6.5 (Básica)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full bg-purple-700" /> Puntos familiares (Gloria / Ángela)
         </span>
       </div>
 
@@ -131,15 +228,56 @@ export default function MapView({ arriendos, ventas }) {
             }}
           />
 
+          {/* Pines fijos de Gloria y Ángela */}
+          {definedFamily.map((fam) => {
+            const famSv = buildStreetViewUrl(fam.lat, fam.lng);
+            return (
+              <Marker
+                key={fam.id}
+                position={[fam.lat, fam.lng]}
+                icon={createFamilyPin(fam.name)}
+                zIndexOffset={1000}
+              >
+                <Popup maxWidth={240}>
+                  <div className="space-y-1.5 p-0.5 text-xs text-ink">
+                    <span className="inline-block rounded bg-purple-100 px-2 py-0.5 font-bold text-purple-900">
+                      Referencia familiar
+                    </span>
+                    <p className="font-serif text-sm font-bold text-ink">{fam.name}</p>
+                    <p className="text-stone-600">{fam.address}</p>
+                    {famSv && (
+                      <a
+                        href={famSv}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 rounded-md border border-stoneLine bg-white px-2.5 py-1 text-[11px] font-semibold text-ink"
+                      >
+                        <Eye className="h-3 w-3" />
+                        Ver cuadra (Street View)
+                      </a>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+
           {markers.map((item) => {
             const sv = buildStreetViewUrl(item.lat, item.lng);
+            const distances = definedFamily
+              .map((fam) => {
+                const km = haversineKm(item.lat, item.lng, fam.lat, fam.lng);
+                return km !== null ? `A ${km} km de ${fam.name}` : null;
+              })
+              .filter(Boolean);
+
             return (
               <Marker
                 key={item.id}
                 position={[item.lat, item.lng]}
                 icon={createScorePin(item.score, item.operacion)}
               >
-                <Popup maxWidth={270}>
+                <Popup maxWidth={280}>
                   <div className="space-y-2 p-0.5 text-xs text-ink">
                     {item.fotos?.[0] && (
                       <img
@@ -153,7 +291,7 @@ export default function MapView({ arriendos, ventas }) {
                         {item.operacion === 'venta' ? 'Venta' : 'Arriendo'}
                       </span>
                       <span className="font-bold text-ink">
-                        Score {Number(item.score).toFixed(1)}
+                        Puntuación {Number(item.score).toFixed(1)}
                       </span>
                     </div>
                     <div>
@@ -172,6 +310,11 @@ export default function MapView({ arriendos, ventas }) {
                     <p className="text-[11px] text-stone-600">
                       {item.area} m² · {item.hab} hab · {item.banos} baños · {item.garajes} gar.
                     </p>
+                    {distances.length > 0 && (
+                      <p className="rounded bg-purple-50 px-2 py-1 text-[11px] font-medium text-purple-900">
+                        {distances.join(' · ')}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {item.enlaces?.[0] && (
                         <a

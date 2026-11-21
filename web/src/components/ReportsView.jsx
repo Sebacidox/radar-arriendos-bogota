@@ -13,7 +13,7 @@ import {
   Cell,
 } from 'recharts';
 import { TrendingDown, Clock, CheckCircle2 } from 'lucide-react';
-import { formatCOP, formatCompactCOP } from '../utils/formatters';
+import { formatCOP, formatCompactCOP, isListingUnavailable } from '../utils/formatters';
 
 export default function ReportsView({
   arriendos,
@@ -30,7 +30,7 @@ export default function ReportsView({
   const activeList = useMemo(
     () =>
       (isVenta ? ventas : arriendos).filter(
-        (x) => x.estadoVisita !== 'Descartado'
+        (x) => x.estadoVisita !== 'Descartado' && !isListingUnavailable(x)
       ),
     [isVenta, ventas, arriendos]
   );
@@ -53,7 +53,7 @@ export default function ReportsView({
   const bestBarrio = budgetChartData[0];
 
   // 2. Mapa de Oportunidades (Área vs Precio Total)
-  const { belowAvgPoints, aboveAvgPoints, overallAvgM2 } = useMemo(() => {
+  const { belowAvgPoints, aboveAvgPoints, overallAvgM2, referenceLineData } = useMemo(() => {
     const valid = activeList.filter((x) => x.area > 0 && x.totalMensual > 0);
     const avg =
       valid.length > 0
@@ -62,7 +62,12 @@ export default function ReportsView({
 
     const below = [];
     const above = [];
+    let minArea = Infinity;
+    let maxArea = -Infinity;
+
     for (const item of valid) {
+      if (item.area < minArea) minArea = item.area;
+      if (item.area > maxArea) maxArea = item.area;
       const point = {
         x: item.area,
         y: isVenta ? item.precioVenta : item.totalMensual,
@@ -73,7 +78,21 @@ export default function ReportsView({
       if (item.costoM2 <= avg) below.push(point);
       else above.push(point);
     }
-    return { belowAvgPoints: below, aboveAvgPoints: above, overallAvgM2: avg };
+
+    const refLine =
+      valid.length > 0 && avg > 0
+        ? [
+            { x: Math.max(60, Math.floor(minArea - 2)), y: Math.round(avg * Math.max(60, Math.floor(minArea - 2))) },
+            { x: Math.ceil(maxArea + 2), y: Math.round(avg * Math.ceil(maxArea + 2)) },
+          ]
+        : [];
+
+    return {
+      belowAvgPoints: below,
+      aboveAvgPoints: above,
+      overallAvgM2: avg,
+      referenceLineData: refLine,
+    };
   }, [activeList, isVenta]);
 
   // 3. Radar de Negociación
@@ -262,9 +281,21 @@ export default function ReportsView({
           <h3 className="font-serif text-lg font-bold text-ink">
             2. Mapa de Oportunidades (Área vs. Precio)
           </h3>
-          <p className="mb-4 text-xs text-stone-500">
-            Los puntos verdes están por debajo del promedio ({formatCOP(overallAvgM2)}/m²). Haz clic en cualquier punto para abrir el apartamento.
+          <p className="mb-2 text-xs text-stone-500">
+            La recta punteada marca el promedio ({formatCOP(overallAvgM2)}/m²). Todo punto por debajo está a mejor precio que el promedio; haz clic en cualquier punto para ver el inmueble.
           </p>
+
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] font-medium text-stone-600">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-sage" /> Debajo de la línea (oportunidad)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-600" /> Encima de la línea
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-4 border-t-2 border-dashed border-ink" /> Recta promedio $/m²
+            </span>
+          </div>
 
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -275,6 +306,7 @@ export default function ReportsView({
                   dataKey="x"
                   name="Área"
                   unit=" m²"
+                  domain={['dataMin - 2', 'dataMax + 2']}
                   tick={{ fontSize: 11, fill: '#57534E' }}
                 />
                 <YAxis
@@ -288,7 +320,9 @@ export default function ReportsView({
                 <Tooltip
                   cursor={{ strokeDasharray: '3 3' }}
                   content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
+                    if (!active || !payload?.length || !payload[0]?.payload?.listing) {
+                      return null;
+                    }
                     const p = payload[0].payload;
                     return (
                       <div className="rounded-xl border border-stoneLine bg-white p-2.5 text-xs shadow-lg">
@@ -303,6 +337,15 @@ export default function ReportsView({
                     );
                   }}
                 />
+                {referenceLineData.length === 2 && (
+                  <Scatter
+                    name="Recta promedio $/m²"
+                    data={referenceLineData}
+                    line={{ stroke: '#1C1917', strokeWidth: 2, strokeDasharray: '6 4' }}
+                    shape={() => <g />}
+                    isAnimationActive={false}
+                  />
+                )}
                 <Scatter
                   name="Por debajo del promedio"
                   data={belowAvgPoints}

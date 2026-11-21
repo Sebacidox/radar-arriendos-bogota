@@ -13,6 +13,7 @@ import {
   CHECKLIST_ITEMS,
   buildStreetViewUrl,
   formatCOP,
+  isListingUnavailable,
 } from '../utils/formatters';
 
 export default function FavoritesView({
@@ -96,6 +97,7 @@ function FavoriteVisitCard({
 
   const completedCount = CHECKLIST_ITEMS.filter((c) => checklist[c.key]).length;
   const streetViewUrl = buildStreetViewUrl(listing.lat, listing.lng);
+  const isUnavailable = isListingUnavailable(listing);
 
   const handleSave = async () => {
     const ok = await onSaveVisitDetails(listing, notes, checklist);
@@ -130,7 +132,18 @@ function FavoriteVisitCard({
             <span className="text-xs font-semibold text-stone-500">
               Puntuación: {Number(listing.score).toFixed(1)}/10
             </span>
+            {isUnavailable && (
+              <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-800">
+                Ya no disponible en el portal
+              </span>
+            )}
           </div>
+
+          {isUnavailable && (
+            <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+              Aviso: el enlace original dejó de estar disponible; verifica antes de desplazarte a la visita.
+            </p>
+          )}
 
           <h3 className="mt-2 font-serif text-lg font-bold text-ink">
             {listing.barrio} ·{' '}

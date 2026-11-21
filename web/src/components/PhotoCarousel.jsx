@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Building2, Sparkles, TrendingDown, Clock } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Building2,
+  Sparkles,
+  TrendingDown,
+  Clock,
+  AlertOctagon,
+} from 'lucide-react';
+import { isListingUnavailable } from '../utils/formatters';
 
 export default function PhotoCarousel({ listing }) {
   const [index, setIndex] = useState(0);
@@ -9,9 +18,10 @@ export default function PhotoCarousel({ listing }) {
   const currentUrl = validFotos[index] || validFotos[0] || '';
   const total = validFotos.length;
 
-  const isNuevo = listing.estado.toUpperCase().startsWith('NUEVO');
-  const isBajo = listing.estado.toUpperCase().includes('BAJÓ');
-  const isNegotiable = Number(listing.diasEnMercado) >= 21;
+  const isUnavailable = isListingUnavailable(listing);
+  const isNuevo = !isUnavailable && listing.estado.toUpperCase().startsWith('NUEVO');
+  const isBajo = !isUnavailable && listing.estado.toUpperCase().includes('BAJÓ');
+  const isNegotiable = !isUnavailable && Number(listing.diasEnMercado) >= 21;
 
   const handlePrev = (e) => {
     e.stopPropagation();
@@ -52,6 +62,12 @@ export default function PhotoCarousel({ listing }) {
 
       {/* Etiquetas flotantes */}
       <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-1.5">
+        {isUnavailable && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold text-white shadow">
+            <AlertOctagon className="h-3 w-3" />
+            Ya no disponible en el portal
+          </span>
+        )}
         {isNuevo && (
           <span className="inline-flex items-center gap-1 rounded-full bg-sage px-2.5 py-1 text-xs font-semibold text-white shadow">
             <Sparkles className="h-3 w-3" />
