@@ -140,7 +140,7 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
         features_extra=features_extra,
         operacion=operacion,
         precio_venta=precio_venta,
-        fotos=fotos_raw[:5],
+        fotos=fotos_raw,
         antiguedad=antiguedad,
         trato_directo_hint=trato_directo,
     )

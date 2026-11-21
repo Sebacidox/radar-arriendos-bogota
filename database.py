@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from config import DB_PATH
+from filters import clean_fotos
 from models import EvaluatedListing
 from scoring import calculate_score
 from scrapers.availability import check_listing_availability
@@ -67,8 +68,8 @@ def deduplicate_listings(listings: list[EvaluatedListing]) -> list[EvaluatedList
             existing.zona = item.zona
         if (not existing.antiguedad or existing.antiguedad == "No especificada") and item.antiguedad:
             existing.antiguedad = item.antiguedad
-        if item.fotos:
-            existing.fotos = list(dict.fromkeys([*existing.fotos, *item.fotos]))[:5]
+        if item.fotos and (not existing.fotos or len(item.fotos) > len(existing.fotos)):
+            existing.fotos = clean_fotos(item.fotos)
         existing.etiquetas_confort = _merge_comfort_tags(
             existing.etiquetas_confort, item.etiquetas_confort
         )
@@ -256,7 +257,7 @@ class DatabaseManager:
                     item.dias_en_mercado = 0
 
                     links_json = json.dumps(item.portales_enlaces, ensure_ascii=False)
-                    fotos_json = json.dumps(item.fotos[:5], ensure_ascii=False)
+                    fotos_json = json.dumps(clean_fotos(item.fotos), ensure_ascii=False)
                     conn.execute(
                         """
                         INSERT INTO inmuebles (
@@ -325,8 +326,10 @@ class DatabaseManager:
                     )
 
                     prev_fotos = json.loads(prev.get("fotos_json") or "[]")
-                    if not item.fotos and prev_fotos:
-                        item.fotos = prev_fotos[:5]
+                    if (not item.fotos and prev_fotos) or (len(prev_fotos) > len(item.fotos) and len(item.fotos) <= 5):
+                        item.fotos = clean_fotos(prev_fotos)
+                    else:
+                        item.fotos = clean_fotos(item.fotos)
                     if (not item.antiguedad or item.antiguedad == "No especificada") and prev.get("antiguedad"):
                         item.antiguedad = prev["antiguedad"]
                     item.etiquetas_confort = _merge_comfort_tags(
@@ -420,7 +423,7 @@ class DatabaseManager:
                             item.estado,
                             item.ahorro_cop,
                             json.dumps(item.portales_enlaces, ensure_ascii=False),
-                            json.dumps(item.fotos[:5], ensure_ascii=False),
+                            json.dumps(clean_fotos(item.fotos), ensure_ascii=False),
                             item.antiguedad,
                             item.etiquetas_confort,
                             item.fecha_ultima_deteccion,
@@ -504,7 +507,7 @@ class DatabaseManager:
                                 operacion=prev.get("operacion") or operacion,
                                 precio_venta=int(prev.get("precio_venta") or 0),
                                 tiene_ascensor=True,
-                                fotos=prev_fotos[:5],
+                                fotos=clean_fotos(prev_fotos),
                                 antiguedad=prev.get("antiguedad") or "",
                                 dias_en_mercado=_compute_days_in_market(
                                     prev["fecha_primera_deteccion"], today_str
@@ -580,3 +583,98 @@ class DatabaseManager:
             inm["price_history"] = history_by_fp.get(inm["fingerprint"], [])
 
         return inmuebles
+
+    def get_fotos_by_fingerprint(self, operacion: str) -> dict[str, list[str]]:
+        """Retorna las galerías ya guardadas en SQLite indexadas por fingerprint."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT fingerprint, fotos_json FROM inmuebles WHERE operacion = ?",
+                (operacion,),
+            ).fetchall()
+        result: dict[str, list[str]] = {}
+        for row in rows:
+            try:
+                fotos = json.loads(row["fotos_json"] or "[]")
+            except json.JSONDecodeError:
+                fotos = []
+            if isinstance(fotos, list) and fotos:
+                result[row["fingerprint"]] = clean_fotos(fotos)
+        return result
+
+    def get_active_evaluated(self, operacion: str) -> list[EvaluatedListing]:
+        """Reconstruye los inmuebles activos desde SQLite como EvaluatedListing."""
+        today_str = date.today().isoformat()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM inmuebles
+                WHERE operacion = ? AND activo = 1
+                ORDER BY score DESC, fecha_ultima_deteccion DESC
+                """,
+                (operacion,),
+            ).fetchall()
+        items: list[EvaluatedListing] = []
+        for row in rows:
+            rec = dict(row)
+            links = [tuple(x) for x in json.loads(rec.get("portales_enlaces_json") or "[]")]
+            fotos = clean_fotos(json.loads(rec.get("fotos_json") or "[]"))
+            items.append(
+                EvaluatedListing(
+                    fingerprint=rec["fingerprint"],
+                    portal=links[0][0] if links else "",
+                    url=links[0][1] if links else "",
+                    titulo=rec.get("titulo") or "",
+                    descripcion=rec.get("descripcion") or "",
+                    barrio=rec.get("barrio") or "",
+                    barrio_normalizado=rec.get("barrio_normalizado") or "",
+                    zona=rec.get("zona") or "Oriental",
+                    latitud=rec.get("latitud"),
+                    longitud=rec.get("longitud"),
+                    area=float(rec.get("area") or 0),
+                    habitaciones=int(rec.get("habitaciones") or 0),
+                    banos=int(rec.get("banos") or 0),
+                    parqueaderos=int(rec.get("parqueaderos") or 0),
+                    estrato=int(rec.get("estrato") or 4),
+                    canon=int(rec.get("canon") or 0),
+                    administracion=int(rec.get("administracion") or 0),
+                    costo_total=int(rec.get("costo_total") or 0),
+                    admin_estimada_flag=bool(rec.get("admin_estimada_flag")),
+                    cocina_abierta=bool(rec.get("cocina_abierta")),
+                    balcon=bool(rec.get("balcon")),
+                    costo_m2=float(rec.get("costo_m2") or 0),
+                    score=float(rec.get("score") or 0),
+                    estado=rec.get("estado") or "SIGUE DISPONIBLE",
+                    ahorro_cop=int(rec.get("ahorro_cop") or 0),
+                    portales_enlaces=links,
+                    fecha_primera_deteccion=rec.get("fecha_primera_deteccion") or "",
+                    fecha_ultima_deteccion=rec.get("fecha_ultima_deteccion") or "",
+                    direccion=rec.get("direccion") or "",
+                    operacion=rec.get("operacion") or operacion,
+                    precio_venta=int(rec.get("precio_venta") or 0),
+                    tiene_ascensor=True,
+                    fotos=fotos,
+                    antiguedad=rec.get("antiguedad") or "",
+                    dias_en_mercado=_compute_days_in_market(
+                        rec.get("fecha_primera_deteccion") or "", today_str
+                    ),
+                    etiquetas_confort=rec.get("etiquetas_confort") or "",
+                )
+            )
+        return items
+
+    def update_fotos_batch(self, fotos_by_fp: dict[str, list[str]]) -> int:
+        """Actualiza fotos_json en SQLite para un diccionario {fingerprint: fotos}."""
+        if not fotos_by_fp:
+            return 0
+        updated = 0
+        with self._connect() as conn:
+            for fp, fotos in fotos_by_fp.items():
+                cleaned = clean_fotos(fotos)
+                if not cleaned:
+                    continue
+                cur = conn.execute(
+                    "UPDATE inmuebles SET fotos_json = ? WHERE fingerprint = ?",
+                    (json.dumps(cleaned, ensure_ascii=False), fp),
+                )
+                updated += cur.rowcount
+        return updated

@@ -15,6 +15,7 @@ from scrapers.base import (
     playwright_page,
     random_delay,
 )
+from scrapers.gallery import extract_next_f_chunks
 
 PORTAL_NAME = "Metrocuadrado"
 BASE_URL = "https://www.metrocuadrado.com"
@@ -29,28 +30,7 @@ ZONES = [
     "santa-barbara",
 ]
 
-
-def _extract_next_f_chunks(html_text: str) -> str:
-    """Decodifica los fragmentos JSON embebidos en self.__next_f.push(...) de Next.js."""
-    decoder = json.JSONDecoder()
-    chunks: list[str] = []
-    marker = "self.__next_f.push("
-    pos = 0
-    while True:
-        idx = html_text.find(marker, pos)
-        if idx == -1:
-            break
-        arr_start = html_text.find("[", idx + len(marker))
-        if arr_start == -1:
-            break
-        try:
-            parsed, end_idx = decoder.raw_decode(html_text, arr_start)
-            if isinstance(parsed, list) and len(parsed) >= 2 and isinstance(parsed[1], str):
-                chunks.append(parsed[1])
-            pos = end_idx
-        except json.JSONDecodeError:
-            pos = idx + len(marker)
-    return "\n".join(chunks)
+_extract_next_f_chunks = extract_next_f_chunks
 
 
 def _find_enclosing_json_object(text: str, key_pos: int) -> Optional[dict]:
@@ -210,7 +190,7 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
         features_extra=features_extra,
         operacion=operacion,
         precio_venta=precio_venta,
-        fotos=fotos_raw[:5],
+        fotos=fotos_raw,
         antiguedad=antiguedad,
         trato_directo_hint=trato_directo,
     )

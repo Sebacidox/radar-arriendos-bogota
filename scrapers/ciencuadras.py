@@ -28,6 +28,7 @@ from scrapers.base import (
     playwright_page,
     random_delay,
 )
+from scrapers.gallery import extract_ciencuadras_gallery
 
 PORTAL_NAME = "Ciencuadras"
 BASE_URL = "https://www.ciencuadras.com"
@@ -130,13 +131,9 @@ def _enrich_detail(session, listing: RawListing) -> None:
 
     listing.descripcion = " ".join(text_parts)
 
-    gallery_imgs = re.findall(
-        rf"https://www\.ciencuadras\.com/inmuebles/images/{re.escape(listing.external_id)}/[^\"\'&\s<>]+",
-        detail_html,
-    )
+    gallery_imgs = extract_ciencuadras_gallery(detail_html, prop_id=listing.external_id)
     if gallery_imgs:
-        merged_fotos = [*listing.fotos, *gallery_imgs]
-        listing.fotos = list(dict.fromkeys(merged_fotos))[:5]
+        listing.fotos = gallery_imgs
 
 
 def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]:

@@ -153,19 +153,42 @@ def resolve_coordinates(
     return QUADRANT_DEFAULT_CENTROID_OCCIDENTAL
 
 
-def clean_fotos(fotos: list[str], limit: int = 5) -> list[str]:
-    """Filtra y deduplica hasta 5 URLs limpias de imágenes."""
+_M2_PHOTO_RE = re.compile(
+    r"^(https?://multimedia\.metrocuadrado\.com/[^/]+/[^/]+?)_(p|m|g|h|x)\.(jpg|jpeg|png|webp)(?:\?.*)?$",
+    re.I,
+)
+_M2_QUALITY_RANK = {"x": 5, "h": 4, "g": 3, "m": 2, "p": 1}
+
+
+def _photo_dedup_key(url: str) -> tuple[str, int]:
+    """Genera clave canónica para deduplicar variantes de tamaño de una misma foto."""
+    m = _M2_PHOTO_RE.match(url)
+    if m:
+        base_id = m.group(1).lower()
+        size_code = m.group(2).lower()
+        return f"m2:{base_id}", _M2_QUALITY_RANK.get(size_code, 0)
+    return url, 1
+
+
+def clean_fotos(fotos: list[str], limit: Optional[int] = None) -> list[str]:
+    """Filtra y deduplica URLs limpias de imágenes sin tope artificial salvo que se indique."""
     cleaned: list[str] = []
-    seen: set[str] = set()
+    index_by_key: dict[str, tuple[int, int]] = {}
     for url in fotos or []:
         u = str(url or "").strip()
         if not u.startswith(("http://", "https://")):
             continue
-        if u not in seen:
-            seen.add(u)
-            cleaned.append(u)
-            if len(cleaned) >= limit:
+        key, quality = _photo_dedup_key(u)
+        if key not in index_by_key:
+            if limit is not None and len(cleaned) >= limit:
                 break
+            index_by_key[key] = (len(cleaned), quality)
+            cleaned.append(u)
+        else:
+            pos, prev_quality = index_by_key[key]
+            if quality > prev_quality:
+                cleaned[pos] = u
+                index_by_key[key] = (pos, quality)
     return cleaned
 
 
@@ -362,7 +385,7 @@ def evaluate_listing(raw: RawListing) -> Optional[EvaluatedListing]:
     cocina_abierta = detect_open_kitchen(raw.titulo, raw.descripcion, raw.features_extra)
     balcon = detect_balcony(raw.titulo, raw.descripcion, raw.features_extra)
     costo_m2 = round(costo_total / raw.area, 2)
-    fotos_limpias = clean_fotos(raw.fotos, limit=5)
+    fotos_limpias = clean_fotos(raw.fotos)
     antiguedad = detect_antiquity(raw.antiguedad, raw.titulo, raw.descripcion)
     etiquetas_confort = detect_comfort_tags(raw, has_elevator=True)
 

@@ -150,7 +150,7 @@ def _parse_next_data_items(data: dict, operacion: str = "arriendo") -> list[RawL
                 features_extra=features_extra,
                 operacion=operacion,
                 precio_venta=precio_venta,
-                fotos=fotos_raw[:5],
+                fotos=fotos_raw,
                 antiguedad=antiguedad,
                 trato_directo_hint=trato_directo,
             )

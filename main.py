@@ -15,6 +15,7 @@ from scrapers import (
     scrape_metrocuadrado,
     scrape_properati,
 )
+from scrapers.gallery import enrich_listings_galleries
 from sheets_exporter import export_to_sheets
 
 logging.basicConfig(
@@ -72,6 +73,14 @@ def _run_operation(
 
     deduped = deduplicate_listings(evaluated)
     logger.info("[%s] Deduplicación por fingerprint: %d inmuebles únicos activos.", op_label, len(deduped))
+
+    existing_fotos = db.get_fotos_by_fingerprint(operacion=operacion)
+    enriched_cnt = enrich_listings_galleries(deduped, existing_fotos_by_fp=existing_fotos)
+    logger.info(
+        "[%s] Galerías completas enriquecidas en ficha individual: %d inmuebles actualizados.",
+        op_label,
+        enriched_cnt,
+    )
 
     active = db.sync_run(
         deduped_listings=deduped,

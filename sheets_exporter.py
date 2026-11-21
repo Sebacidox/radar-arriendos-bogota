@@ -256,7 +256,19 @@ def _read_manual_notes(ws: gspread.Worksheet) -> dict[str, tuple[str, str, str]]
 
 
 def _format_fotos(fotos: list[str] | None) -> str:
-    return "|".join((fotos or [])[:5])
+    """Serializa todas las URLs limpias separadas por '|' respetando el límite de celda de Sheets."""
+    urls: list[str] = []
+    total_len = 0
+    for url in fotos or []:
+        u = str(url or "").strip()
+        if not u:
+            continue
+        sep = 1 if urls else 0
+        if total_len + sep + len(u) > 48000:
+            break
+        urls.append(u)
+        total_len += sep + len(u)
+    return "|".join(urls)
 
 
 def _format_sources(portales_enlaces: list[tuple[str, str]] | list[list[str]]) -> str:
@@ -939,7 +951,7 @@ def _record_to_evaluated(rec: dict, operacion: str) -> EvaluatedListing:
         operacion=rec.get("operacion") or operacion,
         precio_venta=int(rec.get("precio_venta") or 0),
         tiene_ascensor=True,
-        fotos=(rec.get("fotos") or [])[:5],
+        fotos=list(rec.get("fotos") or []),
         antiguedad=rec.get("antiguedad") or "",
         dias_en_mercado=int(rec.get("dias_en_mercado") or 0),
         etiquetas_confort=rec.get("etiquetas_confort") or "",
