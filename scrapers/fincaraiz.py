@@ -90,6 +90,7 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
             barrio = neighs[0].get("name") or ""
 
     features_extra: list[str] = []
+    antiguedad = ""
     for fac in item.get("facilities") or []:
         if isinstance(fac, dict) and fac.get("name"):
             features_extra.append(str(fac["name"]))
@@ -97,8 +98,23 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
         if isinstance(tech, dict):
             field_name = tech.get("field") or ""
             val = tech.get("value") or ""
+            text_label = str(tech.get("text") or "").lower()
             if field_name or val:
                 features_extra.append(f"{field_name} {val}".strip())
+            if not antiguedad and (field_name == "constructionYear" or "antig" in text_label) and val:
+                antiguedad = str(val).strip()
+
+    fotos_raw: list[str] = []
+    if item.get("img"):
+        fotos_raw.append(str(item["img"]))
+    for img_obj in item.get("images") or []:
+        if isinstance(img_obj, dict) and img_obj.get("image"):
+            fotos_raw.append(str(img_obj["image"]))
+        elif isinstance(img_obj, str):
+            fotos_raw.append(img_obj)
+
+    owner = item.get("owner") or {}
+    trato_directo = bool(owner.get("particular")) or str(owner.get("type") or "").lower() == "particular"
 
     direccion = str(item.get("address") or "").strip() if item.get("showAddress", True) else ""
 
@@ -124,6 +140,9 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
         features_extra=features_extra,
         operacion=operacion,
         precio_venta=precio_venta,
+        fotos=fotos_raw[:5],
+        antiguedad=antiguedad,
+        trato_directo_hint=trato_directo,
     )
 
 

@@ -36,16 +36,22 @@ HISTORICO_ARRIENDOS_HEADERS: list[str] = [
     "Zona",
     "Barrio",
     "Dirección",
+    "Lat",
+    "Lng",
     "Estrato",
     "Área (m²)",
     "Hab",
     "Baños",
     "Garajes",
+    "Antiguedad",
     "Canon Actual",
     "Admin Actual",
     "Total Mensual Actual",
     "Ahorro Último Cambio (COP)",
     "Cambios de Precio",
+    "Etiquetas_Confort",
+    "Dias_en_Mercado",
+    "Fotos",
     "Fecha Primera Aparición",
     "Fecha Última Aparición",
     "Puntuación",
@@ -60,15 +66,21 @@ HISTORICO_VENTAS_HEADERS: list[str] = [
     "Zona",
     "Barrio",
     "Dirección",
+    "Lat",
+    "Lng",
     "Estrato",
     "Área (m²)",
     "Hab",
     "Baños",
     "Garajes",
+    "Antiguedad",
     "Precio Venta Actual",
     "Admin Mensual",
     "Ahorro Último Cambio (COP)",
     "Cambios de Precio",
+    "Etiquetas_Confort",
+    "Dias_en_Mercado",
+    "Fotos",
     "Fecha Primera Aparición",
     "Fecha Última Aparición",
     "Puntuación",
@@ -119,7 +131,8 @@ CURRENCY_HEADERS = {
 }
 
 DECIMAL_HEADERS = {"Puntuación", "Área (m²)"}
-INTEGER_HEADERS = {"Estrato", "Hab", "Baños", "Garajes", "Ofertas Activas"}
+COORD_HEADERS = {"Lat", "Lng"}
+INTEGER_HEADERS = {"Estrato", "Hab", "Baños", "Garajes", "Ofertas Activas", "Dias_en_Mercado"}
 PERCENT_HEADERS = {"% Cocina Abierta", "% Balcón"}
 CENTER_HEADERS = {
     "Puntuación",
@@ -133,6 +146,7 @@ CENTER_HEADERS = {
     "Cocina Abierta",
     "Balcón",
     "Ofertas Activas",
+    "Dias_en_Mercado",
     "Fecha Detección",
     "Fecha Primera Aparición",
     "Fecha Última Aparición",
@@ -145,11 +159,18 @@ CUSTOM_COL_WIDTHS: dict[str, int] = {
     "Zona": 95,
     "Barrio": 150,
     "Dirección": 185,
+    "Lat": 95,
+    "Lng": 100,
+    "Antiguedad": 145,
+    "Etiquetas_Confort": 240,
+    "Dias_en_Mercado": 120,
+    "Fotos": 260,
     "Fuente": 135,
     "Enlaces": 290,
     "Cambios de Precio": 265,
     "Estado_Visita": 140,
     "Notas_Personales": 220,
+    "Checklist_Visita": 240,
 }
 
 THEME_ARRIENDO = {
@@ -203,9 +224,9 @@ def _get_or_create_worksheet(
         return spreadsheet.add_worksheet(title=title, rows=rows, cols=cols)
 
 
-def _read_manual_notes(ws: gspread.Worksheet) -> dict[str, tuple[str, str]]:
-    """Lee Estado_Visita y Notas_Personales existentes indexados por Fingerprint."""
-    notes_by_fp: dict[str, tuple[str, str]] = {}
+def _read_manual_notes(ws: gspread.Worksheet) -> dict[str, tuple[str, str, str]]:
+    """Lee Estado_Visita, Notas_Personales y Checklist_Visita indexados por Fingerprint."""
+    notes_by_fp: dict[str, tuple[str, str, str]] = {}
     all_values = ws.get_all_values()
     if not all_values:
         return notes_by_fp
@@ -217,6 +238,7 @@ def _read_manual_notes(ws: gspread.Worksheet) -> dict[str, tuple[str, str]]:
     fp_idx = headers.index("Fingerprint")
     visita_idx = headers.index("Estado_Visita") if "Estado_Visita" in headers else None
     notas_idx = headers.index("Notas_Personales") if "Notas_Personales" in headers else None
+    checklist_idx = headers.index("Checklist_Visita") if "Checklist_Visita" in headers else None
 
     for row in all_values[1:]:
         if fp_idx >= len(row):
@@ -226,10 +248,15 @@ def _read_manual_notes(ws: gspread.Worksheet) -> dict[str, tuple[str, str]]:
             continue
         estado_visita = row[visita_idx].strip() if (visita_idx is not None and visita_idx < len(row)) else ""
         notas = row[notas_idx].strip() if (notas_idx is not None and notas_idx < len(row)) else ""
-        if estado_visita or notas:
-            notes_by_fp[fp] = (estado_visita, notas)
+        checklist = row[checklist_idx].strip() if (checklist_idx is not None and checklist_idx < len(row)) else ""
+        if estado_visita or notas or checklist:
+            notes_by_fp[fp] = (estado_visita, notas, checklist)
 
     return notes_by_fp
+
+
+def _format_fotos(fotos: list[str] | None) -> str:
+    return "|".join((fotos or [])[:5])
 
 
 def _format_sources(portales_enlaces: list[tuple[str, str]] | list[list[str]]) -> str:
@@ -442,6 +469,9 @@ def _build_sheet_styling_requests(
             elif header in DECIMAL_HEADERS:
                 fmt = {"type": "NUMBER", "pattern": "0.0"}
                 align = "CENTER" if header == "Puntuación" else "RIGHT"
+            elif header in COORD_HEADERS:
+                fmt = {"type": "NUMBER", "pattern": "0.000000"}
+                align = "RIGHT"
             elif header in INTEGER_HEADERS:
                 fmt = {"type": "NUMBER", "pattern": "#,##0"}
                 align = "CENTER"
@@ -733,13 +763,15 @@ def _build_resumen_charts(
 
 def _build_top_rows(
     active_listings: list[EvaluatedListing],
-    manual_notes: dict[str, tuple[str, str]],
+    manual_notes: dict[str, tuple[str, str, str]],
     operacion: str,
 ) -> list[list[object]]:
     headers = TOP_VENTAS_HEADERS if operacion == "venta" else TOP_SEMANA_HEADERS
     rows: list[list[object]] = [headers]
     for item in active_listings:
-        estado_visita, notas_personales = manual_notes.get(item.fingerprint, ("", ""))
+        estado_visita, notas_personales, checklist_visita = manual_notes.get(
+            item.fingerprint, ("", "", "")
+        )
         common_prefix: list[object] = [
             item.fingerprint,
             item.score,
@@ -747,11 +779,14 @@ def _build_top_rows(
             item.zona,
             item.barrio,
             item.direccion or "No publicada",
+            item.latitud if item.latitud is not None else "",
+            item.longitud if item.longitud is not None else "",
             item.estrato,
             round(item.area, 1),
             item.habitaciones,
             item.banos,
             item.parqueaderos,
+            item.antiguedad or "No especificada",
         ]
         if operacion == "venta":
             money_cols: list[object] = [item.precio_venta, item.administracion]
@@ -766,11 +801,15 @@ def _build_top_rows(
                 "Sí" if item.cocina_abierta else "No",
                 "Sí" if item.balcon else "No",
                 round(item.costo_m2, 0),
+                item.etiquetas_confort,
+                item.dias_en_mercado,
+                _format_fotos(item.fotos),
                 _format_sources(item.portales_enlaces),
                 _format_urls(item.portales_enlaces),
                 item.fecha_ultima_deteccion,
                 estado_visita,
                 notas_personales,
+                checklist_visita,
             ]
         )
     return rows
@@ -798,14 +837,20 @@ def _build_historico_rows(full_history: list[dict], operacion: str) -> list[list
                 rec["zona"],
                 rec["barrio"],
                 rec.get("direccion") or "No publicada",
+                rec["latitud"] if rec.get("latitud") is not None else "",
+                rec["longitud"] if rec.get("longitud") is not None else "",
                 rec["estrato"],
                 round(float(rec["area"]), 1),
                 rec["habitaciones"],
                 rec["banos"],
                 rec["parqueaderos"],
+                rec.get("antiguedad") or "No especificada",
                 *money_cols,
                 rec["ahorro_cop"],
                 cambios_str,
+                rec.get("etiquetas_confort") or "",
+                rec.get("dias_en_mercado", 0),
+                _format_fotos(rec.get("fotos")),
                 rec["fecha_primera_deteccion"],
                 rec["fecha_ultima_deteccion"],
                 rec["score"],

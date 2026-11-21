@@ -116,7 +116,10 @@ def _enrich_detail(session, listing: RawListing) -> None:
     for li in soup.select("li"):
         txt = li.get_text(" ", strip=True)
         low = txt.lower()
-        if txt and any(kw in low for kw in ("ascensor", "elevador", "balc", "terraza", "cocina")):
+        if txt and any(
+            kw in low
+            for kw in ("ascensor", "elevador", "balc", "terraza", "cocina", "sol", "luz", "vista", "mascota")
+        ):
             text_parts.append(txt)
 
     if not text_parts:
@@ -126,6 +129,14 @@ def _enrich_detail(session, listing: RawListing) -> None:
         text_parts.append(soup.get_text(" ", strip=True)[:5000])
 
     listing.descripcion = " ".join(text_parts)
+
+    gallery_imgs = re.findall(
+        rf"https://www\.ciencuadras\.com/inmuebles/images/{re.escape(listing.external_id)}/[^\"\'&\s<>]+",
+        detail_html,
+    )
+    if gallery_imgs:
+        merged_fotos = [*listing.fotos, *gallery_imgs]
+        listing.fotos = list(dict.fromkeys(merged_fotos))[:5]
 
 
 def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]:
@@ -161,6 +172,16 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
     titulo = f"{real_estate_type} en {op_label} en {barrio}, {item.get('city') or 'Bogotá'}".strip()
     direccion = str(item.get("address") or "").strip()
 
+    ant_raw = str(item.get("antiquity") or "").strip()
+    if ant_raw.isdigit():
+        antiguedad = "Para estrenar" if int(ant_raw) == 0 else f"{ant_raw} años"
+    else:
+        antiguedad = ant_raw
+
+    fotos_raw = [str(item["image"]).strip()] if item.get("image") else []
+    user_type = str(item.get("userType") or "").lower()
+    trato_directo = any(w in user_type for w in ("natural", "particular", "propietario"))
+
     return RawListing(
         portal=PORTAL_NAME,
         external_id=prop_id,
@@ -182,6 +203,9 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
         es_edificio_o_conjunto=True,
         operacion=operacion,
         precio_venta=precio_venta,
+        fotos=fotos_raw,
+        antiguedad=antiguedad,
+        trato_directo_hint=trato_directo,
     )
 
 

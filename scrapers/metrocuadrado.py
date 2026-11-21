@@ -102,11 +102,12 @@ def _extract_items_from_html(html_text: str) -> list[dict]:
     return items
 
 
-def _parse_featured_flags(featured: object) -> list[str]:
-    """Convierte la lista `featured` de Metrocuadrado a texto legible solo para flags activos (:S)."""
+def _parse_featured_flags(featured: object) -> tuple[list[str], str]:
+    """Extrae etiquetas legibles y antigüedad desde la lista `featured` de Metrocuadrado."""
     if not isinstance(featured, list):
-        return []
+        return [], ""
     tokens: list[str] = []
+    antiguedad = ""
     mapping = {
         "concocinaamericana": "cocina tipo americano",
         "concocinaabierta": "cocina abierta",
@@ -114,19 +115,31 @@ def _parse_featured_flags(featured: object) -> list[str]:
         "conterraza": "terraza",
         "ascensor": "ascensor",
         "conascensor": "ascensor",
+        "luzenlamanana": "sol en la manana",
+        "luzenlatarde": "sol en la tarde",
+        "convistapanoramica": "vista exterior",
     }
     for entry in featured:
         text = str(entry).strip()
         if ":" not in text:
             continue
         key, val = text.split(":", 1)
-        if val.strip().upper() != "S":
+        key_clean = key.lower().replace("_", "").replace("-", "").strip()
+        val_clean = val.strip()
+
+        if key_clean == "tiempoconstruido" and val_clean:
+            antiguedad = val_clean
             continue
-        key_clean = key.lower().replace("_", "").replace("-", "")
+        if key_clean == "vista" and val_clean.lower() == "exterior":
+            tokens.append("vista exterior")
+            continue
+
+        if val_clean.upper() != "S":
+            continue
         for prefix, label in mapping.items():
             if key_clean.startswith(prefix):
                 tokens.append(label)
-    return tokens
+    return tokens, antiguedad
 
 
 def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]:
@@ -154,7 +167,7 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
     lon_f = float(lon) if lon is not None else None
 
     barrio = item.get("mnombrecomunbarrio") or item.get("mbarrio") or ""
-    features_extra = _parse_featured_flags(item.get("featured"))
+    features_extra, antiguedad = _parse_featured_flags(item.get("featured"))
     descripcion = str(item.get("comment") or "")
     direccion = str(item.get("address") or "").strip()
     if not direccion and descripcion:
@@ -165,6 +178,15 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
         )
         if addr_match:
             direccion = addr_match.group(1).strip()
+
+    fotos_raw: list[str] = []
+    if item.get("imageLink"):
+        fotos_raw.append(str(item["imageLink"]))
+    for photo_id in item.get("mgaleriainmueble") or []:
+        if photo_id:
+            fotos_raw.append(f"https://multimedia.metrocuadrado.com/{prop_id}/{photo_id}_p.jpg")
+
+    trato_directo = str(item.get("OwnerType") or "").strip().lower() == "persona natural"
 
     return RawListing(
         portal=PORTAL_NAME,
@@ -188,6 +210,9 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
         features_extra=features_extra,
         operacion=operacion,
         precio_venta=precio_venta,
+        fotos=fotos_raw[:5],
+        antiguedad=antiguedad,
+        trato_directo_hint=trato_directo,
     )
 
 

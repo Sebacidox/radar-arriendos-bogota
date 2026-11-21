@@ -4,13 +4,33 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
 from config import DB_PATH
 from models import EvaluatedListing
 from scoring import calculate_score
+
+
+def _compute_days_in_market(first_date_str: str, ref_date_str: str) -> int:
+    """Calcula días transcurridos entre la primera detección y la fecha de referencia."""
+    try:
+        d1 = date.fromisoformat(str(first_date_str)[:10])
+        d2 = date.fromisoformat(str(ref_date_str)[:10])
+        return max(0, (d2 - d1).days)
+    except ValueError:
+        return 0
+
+
+def _merge_comfort_tags(tags_a: str, tags_b: str) -> str:
+    combined = [
+        t.strip()
+        for src in (tags_a, tags_b)
+        for t in (src or "").split(",")
+        if t.strip()
+    ]
+    return ", ".join(dict.fromkeys(combined))
 
 
 def deduplicate_listings(listings: list[EvaluatedListing]) -> list[EvaluatedListing]:
@@ -34,7 +54,7 @@ def deduplicate_listings(listings: list[EvaluatedListing]) -> list[EvaluatedList
                 existing.portales_enlaces.append((portal, url))
                 seen_urls.add(url)
 
-        # Completar descripción / dirección / coordenadas si el existente carecía de ellas
+        # Completar descripción / dirección / coordenadas / fotos / antigüedad / etiquetas
         if len(item.descripcion) > len(existing.descripcion):
             existing.descripcion = item.descripcion
         if not existing.direccion and item.direccion:
@@ -43,6 +63,13 @@ def deduplicate_listings(listings: list[EvaluatedListing]) -> list[EvaluatedList
             existing.latitud = item.latitud
             existing.longitud = item.longitud
             existing.zona = item.zona
+        if (not existing.antiguedad or existing.antiguedad == "No especificada") and item.antiguedad:
+            existing.antiguedad = item.antiguedad
+        if item.fotos:
+            existing.fotos = list(dict.fromkeys([*existing.fotos, *item.fotos]))[:5]
+        existing.etiquetas_confort = _merge_comfort_tags(
+            existing.etiquetas_confort, item.etiquetas_confort
+        )
 
         existing.cocina_abierta = existing.cocina_abierta or item.cocina_abierta
         existing.balcon = existing.balcon or item.balcon
@@ -123,6 +150,9 @@ class DatabaseManager:
                     estado TEXT NOT NULL,
                     ahorro_cop INTEGER NOT NULL DEFAULT 0,
                     portales_enlaces_json TEXT NOT NULL,
+                    fotos_json TEXT NOT NULL DEFAULT '[]',
+                    antiguedad TEXT NOT NULL DEFAULT '',
+                    etiquetas_confort TEXT NOT NULL DEFAULT '',
                     fecha_primera_deteccion TEXT NOT NULL,
                     fecha_ultima_deteccion TEXT NOT NULL,
                     activo INTEGER NOT NULL DEFAULT 1
@@ -155,6 +185,12 @@ class DatabaseManager:
                 conn.execute("ALTER TABLE inmuebles ADD COLUMN operacion TEXT NOT NULL DEFAULT 'arriendo'")
             if "precio_venta" not in cols:
                 conn.execute("ALTER TABLE inmuebles ADD COLUMN precio_venta INTEGER NOT NULL DEFAULT 0")
+            if "fotos_json" not in cols:
+                conn.execute("ALTER TABLE inmuebles ADD COLUMN fotos_json TEXT NOT NULL DEFAULT '[]'")
+            if "antiguedad" not in cols:
+                conn.execute("ALTER TABLE inmuebles ADD COLUMN antiguedad TEXT NOT NULL DEFAULT ''")
+            if "etiquetas_confort" not in cols:
+                conn.execute("ALTER TABLE inmuebles ADD COLUMN etiquetas_confort TEXT NOT NULL DEFAULT ''")
 
             run_cols = {row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
             if "operacion" not in run_cols:
@@ -214,8 +250,10 @@ class DatabaseManager:
                     item.ahorro_cop = 0
                     item.fecha_primera_deteccion = today_str
                     item.fecha_ultima_deteccion = today_str
+                    item.dias_en_mercado = 0
 
                     links_json = json.dumps(item.portales_enlaces, ensure_ascii=False)
+                    fotos_json = json.dumps(item.fotos[:5], ensure_ascii=False)
                     conn.execute(
                         """
                         INSERT INTO inmuebles (
@@ -223,8 +261,9 @@ class DatabaseManager:
                             zona, direccion, latitud, longitud, area, habitaciones, banos, parqueaderos,
                             estrato, canon, precio_venta, administracion, costo_total, admin_estimada_flag,
                             cocina_abierta, balcon, costo_m2, score, estado, ahorro_cop,
-                            portales_enlaces_json, fecha_primera_deteccion, fecha_ultima_deteccion, activo
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                            portales_enlaces_json, fotos_json, antiguedad, etiquetas_confort,
+                            fecha_primera_deteccion, fecha_ultima_deteccion, activo
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                         """,
                         (
                             item.fingerprint,
@@ -254,6 +293,9 @@ class DatabaseManager:
                             item.estado,
                             item.ahorro_cop,
                             links_json,
+                            fotos_json,
+                            item.antiguedad,
+                            item.etiquetas_confort,
                             item.fecha_primera_deteccion,
                             item.fecha_ultima_deteccion,
                         ),
@@ -275,6 +317,18 @@ class DatabaseManager:
                     old_total = int(prev["costo_total"])
                     item.fecha_primera_deteccion = prev["fecha_primera_deteccion"]
                     item.fecha_ultima_deteccion = today_str
+                    item.dias_en_mercado = _compute_days_in_market(
+                        item.fecha_primera_deteccion, today_str
+                    )
+
+                    prev_fotos = json.loads(prev.get("fotos_json") or "[]")
+                    if not item.fotos and prev_fotos:
+                        item.fotos = prev_fotos[:5]
+                    if (not item.antiguedad or item.antiguedad == "No especificada") and prev.get("antiguedad"):
+                        item.antiguedad = prev["antiguedad"]
+                    item.etiquetas_confort = _merge_comfort_tags(
+                        item.etiquetas_confort, prev.get("etiquetas_confort") or ""
+                    )
 
                     # Combinar enlaces históricos con los actuales
                     prev_links = json.loads(prev["portales_enlaces_json"])
@@ -336,6 +390,9 @@ class DatabaseManager:
                             estado = ?,
                             ahorro_cop = ?,
                             portales_enlaces_json = ?,
+                            fotos_json = ?,
+                            antiguedad = ?,
+                            etiquetas_confort = ?,
                             fecha_ultima_deteccion = ?,
                             activo = 1
                         WHERE fingerprint = ?
@@ -360,6 +417,9 @@ class DatabaseManager:
                             item.estado,
                             item.ahorro_cop,
                             json.dumps(item.portales_enlaces, ensure_ascii=False),
+                            json.dumps(item.fotos[:5], ensure_ascii=False),
+                            item.antiguedad,
+                            item.etiquetas_confort,
                             item.fecha_ultima_deteccion,
                             matched_fp,
                         ),
@@ -429,8 +489,13 @@ class DatabaseManager:
         for row in history_rows:
             history_by_fp.setdefault(row["fingerprint"], []).append(dict(row))
 
+        today_str = date.today().isoformat()
         for inm in inmuebles:
             inm["portales_enlaces"] = json.loads(inm["portales_enlaces_json"])
+            inm["fotos"] = json.loads(inm.get("fotos_json") or "[]")
+            inm["dias_en_mercado"] = _compute_days_in_market(
+                inm["fecha_primera_deteccion"], today_str
+            )
             inm["price_history"] = history_by_fp.get(inm["fingerprint"], [])
 
         return inmuebles

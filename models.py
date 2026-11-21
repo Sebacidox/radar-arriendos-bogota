@@ -31,6 +31,9 @@ class RawListing:
     features_extra: list[str] = field(default_factory=list)
     operacion: str = "arriendo"
     precio_venta: Optional[int] = None
+    fotos: list[str] = field(default_factory=list)
+    antiguedad: str = ""
+    trato_directo_hint: bool = False
 
 
 @dataclass
@@ -69,3 +72,7 @@ class EvaluatedListing:
     operacion: str = "arriendo"
     precio_venta: int = 0
     tiene_ascensor: bool = True
+    fotos: list[str] = field(default_factory=list)
+    antiguedad: str = ""
+    dias_en_mercado: int = 0
+    etiquetas_confort: str = ""

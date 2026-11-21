@@ -106,6 +106,27 @@ def _parse_next_data_items(data: dict, operacion: str = "arriendo") -> list[RawL
         barrio = place.get("name") or item.get("neighborhood") or ""
         direccion = str(item.get("address") or place.get("address") or "").strip()
 
+        fotos_raw: list[str] = []
+        for img_entry in (item.get("images") or item.get("photos") or item.get("pictures") or []):
+            if isinstance(img_entry, dict):
+                u = img_entry.get("url") or img_entry.get("src") or img_entry.get("image")
+                if u:
+                    fotos_raw.append(str(u))
+            elif isinstance(img_entry, str):
+                fotos_raw.append(img_entry)
+
+        antiguedad = str(
+            item.get("age")
+            or item.get("antiquity")
+            or (features.get("antiquity") if isinstance(features, dict) else "")
+            or ""
+        ).strip()
+        trato_directo = bool(item.get("is_owner")) or str(item.get("publisher_type") or "").lower() in (
+            "owner",
+            "particular",
+            "persona natural",
+        )
+
         listings.append(
             RawListing(
                 portal=PORTAL_NAME,
@@ -129,6 +150,9 @@ def _parse_next_data_items(data: dict, operacion: str = "arriendo") -> list[RawL
                 features_extra=features_extra,
                 operacion=operacion,
                 precio_venta=precio_venta,
+                fotos=fotos_raw[:5],
+                antiguedad=antiguedad,
+                trato_directo_hint=trato_directo,
             )
         )
     return listings

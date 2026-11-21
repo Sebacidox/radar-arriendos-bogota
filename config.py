@@ -37,6 +37,23 @@ BARRIO_WHITELIST_ZONA: dict[str, str] = {
     "mazuren": "Occidental",
 }
 
+# Centroides aproximados (lat, lng) para barrios de la lista blanca sin coordenadas del portal
+BARRIO_CENTROIDS: dict[str, tuple[float, float]] = {
+    "santa barbara norte": (4.7025, -74.0395),
+    "contador": (4.7165, -74.0415),
+    "cedritos": (4.7215, -74.0355),
+    "barrancas": (4.7285, -74.0295),
+    "caobos": (4.7245, -74.0415),
+    "alcala": (4.7190, -74.0535),
+    "prado veraniego norte": (4.7155, -74.0575),
+    "las villas": (4.7120, -74.0630),
+    "iberia": (4.7195, -74.0645),
+    "colina campestre": (4.7280, -74.0655),
+    "mazuren": (4.7325, -74.0545),
+}
+QUADRANT_DEFAULT_CENTROID_ORIENTAL: tuple[float, float] = (4.7150, -74.0370)
+QUADRANT_DEFAULT_CENTROID_OCCIDENTAL: tuple[float, float] = (4.7180, -74.0600)
+
 # Aliases habituales en portales colombianos mapeados al nombre canónico de la lista blanca
 BARRIO_ALIASES: dict[str, str] = {
     "el contador": "contador",
@@ -115,11 +132,14 @@ TOP_SEMANA_HEADERS: list[str] = [
     "Zona",
     "Barrio",
     "Dirección",
+    "Lat",
+    "Lng",
     "Estrato",
     "Área (m²)",
     "Hab",
     "Baños",
     "Garajes",
+    "Antiguedad",
     "Canon",
     "Admin",
     "Total Mensual",
@@ -127,11 +147,15 @@ TOP_SEMANA_HEADERS: list[str] = [
     "Cocina Abierta",
     "Balcón",
     "Costo/m²",
+    "Etiquetas_Confort",
+    "Dias_en_Mercado",
+    "Fotos",
     "Fuente",
     "Enlaces",
     "Fecha Detección",
     "Estado_Visita",
     "Notas_Personales",
+    "Checklist_Visita",
 ]
 
 TOP_VENTAS_HEADERS: list[str] = [
@@ -141,22 +165,29 @@ TOP_VENTAS_HEADERS: list[str] = [
     "Zona",
     "Barrio",
     "Dirección",
+    "Lat",
+    "Lng",
     "Estrato",
     "Área (m²)",
     "Hab",
     "Baños",
     "Garajes",
+    "Antiguedad",
     "Precio Venta",
     "Admin Mensual",
     "Admin Estimada?",
     "Cocina Abierta",
     "Balcón",
     "Precio/m²",
+    "Etiquetas_Confort",
+    "Dias_en_Mercado",
+    "Fotos",
     "Fuente",
     "Enlaces",
     "Fecha Detección",
     "Estado_Visita",
     "Notas_Personales",
+    "Checklist_Visita",
 ]
 
 USER_AGENTS: list[str] = [
