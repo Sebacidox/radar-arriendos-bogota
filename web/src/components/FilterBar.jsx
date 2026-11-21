@@ -78,20 +78,20 @@ export default function FilterBar({
     filters.sortBy !== 'score_desc';
 
   return (
-    <section className="no-print mb-6 rounded-2xl border border-stoneLine bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="no-print mb-5 rounded-2xl border border-stone-200/75 bg-white p-3.5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] sm:p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-500" />
           <input
             type="text"
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
             placeholder="Buscar por barrio o dirección (ej. Cedritos, Contador, Colina)..."
-            className="w-full rounded-xl border border-stoneLine bg-ivory py-2.5 pl-10 pr-4 text-sm text-ink placeholder:text-stone-400 focus:border-sage focus:outline-none focus:ring-2 focus:ring-sage/15"
+            className="min-h-[42px] w-full rounded-xl border border-stone-200/80 bg-ivory py-2 pl-10 pr-4 text-sm text-ink placeholder:text-stone-500 focus:border-sage focus:bg-white focus:outline-none focus:ring-2 focus:ring-sage/15"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <FilterChip
             active={filters.onlyNew}
             onClick={() => toggleFlag('onlyNew')}
@@ -121,7 +121,7 @@ export default function FilterBar({
             <button
               type="button"
               onClick={onReset}
-              className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold text-stone-500 transition hover:bg-stone-100 hover:text-ink"
+              className="inline-flex min-h-[42px] items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-ink"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Limpiar
@@ -132,7 +132,7 @@ export default function FilterBar({
             <button
               type="button"
               onClick={onOpenManualModal}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-sage bg-sage/10 px-3.5 py-2 text-xs font-bold text-sage transition hover:bg-sage hover:text-white"
+              className="inline-flex min-h-[42px] items-center gap-1.5 rounded-xl border border-sage/80 bg-sage/10 px-3.5 py-1.5 text-xs font-bold text-sage transition hover:bg-sage hover:text-white"
             >
               <PlusCircle className="h-3.5 w-3.5" />
               <span>+ Evaluar aviso propio</span>
@@ -142,11 +142,11 @@ export default function FilterBar({
       </div>
 
       {/* Controles claros de ordenamiento y filtros por precio, metraje y calificación */}
-      <div className="mt-4 grid gap-3 border-t border-stoneLine/70 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-3 grid gap-2.5 border-t border-stone-200/65 pt-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label
             htmlFor="filter-sort"
-            className="mb-1 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-stone-500"
+            className="mb-1 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-stone-700"
           >
             <ArrowUpDown className="h-3 w-3 text-sage" />
             Ordenar por
@@ -155,7 +155,7 @@ export default function FilterBar({
             id="filter-sort"
             value={filters.sortBy}
             onChange={(e) => onChange({ ...filters, sortBy: e.target.value })}
-            className="w-full rounded-xl border border-stoneLine bg-ivory px-3 py-2 text-xs font-semibold text-ink focus:border-sage focus:outline-none focus:ring-2 focus:ring-sage/15"
+            className="min-h-[42px] w-full rounded-xl border border-stone-200/80 bg-ivory px-3 py-1.5 text-xs font-semibold text-ink focus:border-sage focus:bg-white focus:outline-none focus:ring-2 focus:ring-sage/15"
           >
             {Object.entries(SORT_LABELS).map(([val, text]) => (
               <option key={val} value={val}>
@@ -168,7 +168,7 @@ export default function FilterBar({
         <div>
           <label
             htmlFor="filter-max-price"
-            className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-stone-500"
+            className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-stone-700"
           >
             Precio máximo
           </label>
@@ -176,7 +176,7 @@ export default function FilterBar({
             id="filter-max-price"
             value={filters.maxPrice}
             onChange={(e) => onChange({ ...filters, maxPrice: e.target.value })}
-            className="w-full rounded-xl border border-stoneLine bg-ivory px-3 py-2 text-xs font-semibold text-ink focus:border-sage focus:outline-none focus:ring-2 focus:ring-sage/15"
+            className="min-h-[42px] w-full rounded-xl border border-stone-200/80 bg-ivory px-3 py-1.5 text-xs font-semibold text-ink focus:border-sage focus:bg-white focus:outline-none focus:ring-2 focus:ring-sage/15"
           >
             {priceOptions.map((opt) => (
               <option key={opt.value || 'all'} value={opt.value}>
@@ -189,7 +189,7 @@ export default function FilterBar({
         <div>
           <label
             htmlFor="filter-min-area"
-            className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-stone-500"
+            className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-stone-700"
           >
             Metraje mínimo
           </label>
@@ -197,7 +197,7 @@ export default function FilterBar({
             id="filter-min-area"
             value={filters.minArea}
             onChange={(e) => onChange({ ...filters, minArea: e.target.value })}
-            className="w-full rounded-xl border border-stoneLine bg-ivory px-3 py-2 text-xs font-semibold text-ink focus:border-sage focus:outline-none focus:ring-2 focus:ring-sage/15"
+            className="min-h-[42px] w-full rounded-xl border border-stone-200/80 bg-ivory px-3 py-1.5 text-xs font-semibold text-ink focus:border-sage focus:bg-white focus:outline-none focus:ring-2 focus:ring-sage/15"
           >
             {AREA_OPTIONS.map((opt) => (
               <option key={opt.value || 'all'} value={opt.value}>
@@ -210,7 +210,7 @@ export default function FilterBar({
         <div>
           <label
             htmlFor="filter-min-score"
-            className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-stone-500"
+            className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-stone-700"
           >
             Calificación mínima
           </label>
@@ -218,7 +218,7 @@ export default function FilterBar({
             id="filter-min-score"
             value={filters.minScore}
             onChange={(e) => onChange({ ...filters, minScore: e.target.value })}
-            className="w-full rounded-xl border border-stoneLine bg-ivory px-3 py-2 text-xs font-semibold text-ink focus:border-sage focus:outline-none focus:ring-2 focus:ring-sage/15"
+            className="min-h-[42px] w-full rounded-xl border border-stone-200/80 bg-ivory px-3 py-1.5 text-xs font-semibold text-ink focus:border-sage focus:bg-white focus:outline-none focus:ring-2 focus:ring-sage/15"
           >
             {SCORE_OPTIONS.map((opt) => (
               <option key={opt.value || 'all'} value={opt.value}>
@@ -229,14 +229,14 @@ export default function FilterBar({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-stoneLine/70 pt-3 text-xs text-stone-600">
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-stone-200/65 pt-2.5 text-xs text-stone-700">
         <span>
           Mostrando <strong className="text-ink">{filteredCount}</strong> de{' '}
           <strong className="text-ink">{totalCount}</strong>{' '}
           {operacion === 'venta' ? 'apartamentos en venta' : 'apartamentos en arriendo'}{' '}
           con ascensor y garaje
         </span>
-        <span className="font-medium text-stone-500">
+        <span className="font-medium text-stone-600">
           Orden: {SORT_LABELS[filters.sortBy] || SORT_LABELS.score_desc}
         </span>
       </div>
@@ -250,10 +250,10 @@ function FilterChip({ active, onClick, icon: Icon, label }) {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+      className={`inline-flex min-h-[42px] items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
         active
           ? 'border-sage bg-sage text-white shadow-sm'
-          : 'border-stoneLine bg-ivory text-stone-700 hover:border-sage/40 hover:bg-stone-100'
+          : 'border-stone-200/80 bg-ivory text-stone-700 hover:border-sage/40 hover:bg-stone-100 hover:text-ink'
       }`}
     >
       <Icon className="h-3.5 w-3.5" />

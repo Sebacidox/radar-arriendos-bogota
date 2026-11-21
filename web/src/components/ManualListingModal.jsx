@@ -171,8 +171,8 @@ export default function ManualListingModal({
       aria-modal="true"
       aria-labelledby="manual-listing-title"
     >
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-stoneLine bg-white shadow-2xl">
-        <div className="flex items-start justify-between border-b border-stoneLine bg-ivory px-5 py-4">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between border-b border-stone-200/75 bg-ivory px-6 py-4 sm:py-5">
           <div>
             <span className="inline-flex items-center gap-1 rounded-full bg-sage/10 px-2.5 py-0.5 text-xs font-bold text-sage">
               <Sparkles className="h-3.5 w-3.5" />
@@ -180,11 +180,11 @@ export default function ManualListingModal({
             </span>
             <h2
               id="manual-listing-title"
-              className="mt-1 font-serif text-xl font-bold text-ink"
+              className="mt-1.5 font-serif text-xl font-bold text-ink"
             >
               Evaluar aviso de ventana, portería o enlace
             </h2>
-            <p className="text-xs text-stone-600">
+            <p className="mt-0.5 text-xs text-stone-700">
               Ingresa solo 4 datos y calcula al instante si está caro y cuánto cuesta en verdad.
             </p>
           </div>
@@ -192,13 +192,13 @@ export default function ManualListingModal({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="rounded-xl border border-stoneLine bg-white p-1.5 text-stone-500 hover:text-ink"
+            className="flex min-h-[42px] min-w-[42px] shrink-0 items-center justify-center rounded-xl border border-stone-200/80 bg-white text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-ink"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="max-h-[78vh] space-y-4 overflow-y-auto p-5 text-sm">
+        <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-6 text-sm">
           {/* 1. Arriendo o Compra */}
           <div>
             <span className="block text-xs font-bold text-ink">

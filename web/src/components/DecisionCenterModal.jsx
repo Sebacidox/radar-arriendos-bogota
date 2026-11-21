@@ -19,7 +19,7 @@ import {
   TrendingDown,
   X,
 } from 'lucide-react';
-import { estimateUtilitiesByStratum, formatCOP } from '../utils/formatters';
+import { estimateUtilitiesByStratum, formatCOP, formatTitleCase } from '../utils/formatters';
 import {
   BARRIOS_DATA_META,
   computePreciseOffer2026,
@@ -378,11 +378,11 @@ export default function DecisionCenterModal({
       aria-modal="true"
       aria-labelledby="decision-modal-title"
     >
-      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-stoneLine bg-white shadow-2xl">
-        {/* Cabecera */}
-        <div className="border-b border-stoneLine bg-ivory px-5 py-4">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-2xl">
+        {/* Cabecera fija editorial */}
+        <div className="shrink-0 border-b border-stone-200/75 bg-ivory px-5 py-4 sm:px-6 sm:py-5">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-sage/10 px-2.5 py-0.5 text-xs font-bold text-sage">
                   {isVenta ? 'Compra' : 'Arriendo'} · {listing.area} m²
@@ -401,12 +401,13 @@ export default function DecisionCenterModal({
               </div>
               <h2
                 id="decision-modal-title"
-                className="mt-1 font-serif text-xl font-bold text-ink"
+                className="mt-1.5 font-serif text-xl font-bold tracking-tight text-ink sm:text-2xl"
               >
-                {listing.barrio || 'Bogotá Norte'} · {formatCOP(latestPrice)}
+                {formatTitleCase(listing.barrio) || 'Bogotá Norte'} ·{' '}
+                <span className="tabular-nums">{formatCOP(latestPrice)}</span>
                 {!isVenta ? '/mes' : ''}
               </h2>
-              <p className="text-xs text-stone-500">
+              <p className="mt-0.5 text-xs text-stone-700">
                 {listing.direccion && listing.direccion !== 'No publicada'
                   ? listing.direccion
                   : `Zona ${listing.zona}`}{' '}
@@ -419,14 +420,14 @@ export default function DecisionCenterModal({
               type="button"
               onClick={onClose}
               aria-label="Cerrar análisis"
-              className="rounded-xl border border-stoneLine bg-white p-1.5 text-stone-500 hover:text-ink"
+              className="flex min-h-[42px] min-w-[42px] shrink-0 items-center justify-center rounded-xl border border-stone-200/80 bg-white text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-ink"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Navegación 3 Pasos */}
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-3 gap-2">
             {[
               { id: 1, label: '1. Precio Real y Duplicados' },
               { id: 2, label: '2. Escudo Anti-Estafa' },
@@ -438,10 +439,10 @@ export default function DecisionCenterModal({
                   key={tab.id}
                   type="button"
                   onClick={() => setStep(tab.id)}
-                  className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                  className={`min-h-[42px] rounded-xl border px-3 py-2 text-xs font-bold transition ${
                     active
                       ? 'border-sage bg-sage text-white shadow-sm'
-                      : 'border-stoneLine bg-white text-stone-700 hover:border-sage/40 hover:text-ink'
+                      : 'border-stone-200/80 bg-white text-stone-700 hover:border-sage/40 hover:text-ink'
                   }`}
                 >
                   {tab.label}
@@ -452,7 +453,7 @@ export default function DecisionCenterModal({
         </div>
 
         {/* Contenido scrollable */}
-        <div className="flex-1 space-y-5 overflow-y-auto p-5 text-sm">
+        <div className="flex-1 space-y-5 overflow-y-auto p-5 text-sm sm:p-6">
           {/* ======================= PASO 1 ======================= */}
           {step === 1 && (
             <div className="space-y-5">
@@ -665,19 +666,19 @@ export default function DecisionCenterModal({
 
               {/* Desglose financiero detallado */}
               {!isVenta && evalArriendo && (
-                <div className="rounded-2xl border border-stoneLine bg-white p-4">
+                <div className="rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
                   <h3 className="font-serif text-base font-bold text-ink">
                     Desglose mensual real (Bogotá 2026)
                   </h3>
-                  <dl className="mt-3 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <dt className="text-stone-600">Canon base + Administración</dt>
+                  <dl className="mt-3 space-y-2 text-xs tabular-nums">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-stone-700">Canon base + Administración</dt>
                       <dd className="font-semibold text-ink">
                         {formatCOP(latestPrice)} + {formatCOP(listing.admin)}
                       </dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-stone-600">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-stone-700">
                         {interlocutor === 'dueno_directo'
                           ? 'Costos no reembolsables de ingreso (Trato directo)'
                           : 'Estudio + derechos de contrato (~33% canon, prorrateado 12m)'}
@@ -688,8 +689,8 @@ export default function DecisionCenterModal({
                           : `+${formatCOP(evalArriendo.ingresoProrrateado)}/mes (${formatCOP(evalArriendo.costosIngresoNoReembolsables)} iniciales)`}
                       </dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-stone-600">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-stone-700">
                         Servicios estimados (Estrato {estratoReal}
                         {evalArriendo.extraCalentador > 0 ? ' + calentador eléctrico' : ', gas'})
                       </dt>
@@ -697,7 +698,7 @@ export default function DecisionCenterModal({
                         {formatCOP(evalArriendo.serviciosBase + evalArriendo.extraCalentador)}/mes
                       </dd>
                     </div>
-                    <div className="flex justify-between border-t border-stoneLine pt-2 text-sm font-bold text-sage">
+                    <div className="flex justify-between border-t border-stone-200/75 pt-2.5 text-sm font-bold text-sage">
                       <dt>Flujo total mensual de bolsillo</dt>
                       <dd>{formatCOP(evalArriendo.flujoBolsilloMensual)}/mes</dd>
                     </div>
@@ -721,23 +722,23 @@ export default function DecisionCenterModal({
               )}
 
               {isVenta && evalCompra && (
-                <div className="rounded-2xl border border-stoneLine bg-white p-4">
+                <div className="rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
                   <h3 className="font-serif text-base font-bold text-ink">
                     Desglose exacto de cierre y costo real (Bogotá 2026)
                   </h3>
-                  <dl className="mt-3 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <dt className="text-stone-600">Precio pedido</dt>
+                  <dl className="mt-3 space-y-2 text-xs tabular-nums">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-stone-700">Precio pedido</dt>
                       <dd className="font-semibold text-ink">{formatCOP(latestPrice)}</dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-stone-600">Notaría comprador (mitad 50% + copias)</dt>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-stone-700">Notaría comprador (mitad 50% + copias)</dt>
                       <dd className="font-semibold text-ink">
                         {formatCOP(evalCompra.notariaComprador)}
                       </dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-stone-600">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-stone-700">
                         Beneficencia / Imp. registro (
                         {beneficencia5050 ? '50/50 legal' : '100% comprador'})
                       </dt>
@@ -745,8 +746,8 @@ export default function DecisionCenterModal({
                         {formatCOP(evalCompra.beneficenciaComprador)}
                       </dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-stone-600">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-stone-700">
                         Derechos ORIP + 2% sist. + Certificado de Tradición ($23k)
                       </dt>
                       <dd className="font-semibold text-ink">
@@ -754,16 +755,16 @@ export default function DecisionCenterModal({
                       </dd>
                     </div>
                     {evalCompra.timbreComprador > 0 && (
-                      <div className="flex justify-between">
-                        <dt className="text-stone-600">Impuesto de timbre (exceso &gt; 20.000 UVT)</dt>
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-stone-700">Impuesto de timbre (exceso &gt; 20.000 UVT)</dt>
                         <dd className="font-semibold text-amberWarm">
                           {formatCOP(evalCompra.timbreComprador)}
                         </dd>
                       </div>
                     )}
                     {evalCompra.costosExtraHipoteca > 0 && (
-                      <div className="flex justify-between">
-                        <dt className="text-stone-600">
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-stone-700">
                           Costos extra escritura de hipoteca (70% tarifa + registro{' '}
                           {modalidadPago === 'credito_fna' ? '0,5% FNA' : '1% banco'})
                         </dt>
@@ -773,16 +774,16 @@ export default function DecisionCenterModal({
                       </div>
                     )}
                     {evalCompra.costoRemodelacion > 0 && (
-                      <div className="flex justify-between">
-                        <dt className="text-stone-600">Presupuesto estimado de obra/arreglos</dt>
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-stone-700">Presupuesto estimado de obra/arreglos</dt>
                         <dd className="font-semibold text-ink">
                           {formatCOP(evalCompra.costoRemodelacion)}
                         </dd>
                       </div>
                     )}
                     {evalCompra.capitalizacionAdmin10a > 0 && (
-                      <div className="flex justify-between">
-                        <dt className="text-stone-600">
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-stone-700">
                           Sobrecosto de admin (+{formatCOP(evalCompra.deltaAdminMensual)}/mes × 10 años)
                         </dt>
                         <dd className="font-semibold text-amberWarm">
@@ -790,7 +791,7 @@ export default function DecisionCenterModal({
                         </dd>
                       </div>
                     )}
-                    <div className="flex justify-between border-t border-stoneLine pt-2 text-sm font-bold text-sage">
+                    <div className="flex justify-between border-t border-stone-200/75 pt-2.5 text-sm font-bold text-sage">
                       <dt>Precio Real Comparativo (PRC total)</dt>
                       <dd>{formatCOP(evalCompra.prc)}</dd>
                     </div>
@@ -1345,20 +1346,20 @@ function LegalSwitchRow({
     : 'border-stoneLine bg-stone-100 text-ink';
 
   return (
-    <div className="rounded-2xl border border-stoneLine bg-ivory/60 p-3.5">
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+    <div className="rounded-2xl border border-stone-200/75 bg-ivory/70 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <p className="text-xs font-bold text-ink">{label}</p>
-          <p className="text-[11px] leading-relaxed text-stone-600">{hint}</p>
+          <p className="text-xs font-bold leading-snug text-ink">{label}</p>
+          <p className="text-[11px] leading-relaxed text-stone-700">{hint}</p>
         </div>
 
-        <div className="flex shrink-0 gap-1.5">
+        <div className="flex shrink-0 gap-2">
           <button
             type="button"
             onClick={() => onChange(true)}
             aria-pressed={Boolean(value)}
-            className={`inline-flex items-center gap-1 rounded-xl border px-3.5 py-1.5 text-xs font-bold transition ${
-              value ? yesActiveClass : 'border-stoneLine bg-white text-stone-600'
+            className={`inline-flex min-h-[42px] min-w-[54px] items-center justify-center gap-1 rounded-xl border px-3.5 py-1.5 text-xs font-bold transition ${
+              value ? yesActiveClass : 'border-stone-200/80 bg-white text-stone-700 hover:bg-stone-50'
             }`}
           >
             Sí
@@ -1367,8 +1368,8 @@ function LegalSwitchRow({
             type="button"
             onClick={() => onChange(false)}
             aria-pressed={!value}
-            className={`inline-flex items-center gap-1 rounded-xl border px-3.5 py-1.5 text-xs font-bold transition ${
-              !value ? noActiveClass : 'border-stoneLine bg-white text-stone-600'
+            className={`inline-flex min-h-[42px] min-w-[54px] items-center justify-center gap-1 rounded-xl border px-3.5 py-1.5 text-xs font-bold transition ${
+              !value ? noActiveClass : 'border-stone-200/80 bg-white text-stone-700 hover:bg-stone-50'
             }`}
           >
             {!value && dangerOnYes && <CheckCircle2 className="h-3.5 w-3.5" />}

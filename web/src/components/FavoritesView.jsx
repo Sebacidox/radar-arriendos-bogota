@@ -14,6 +14,7 @@ import {
   CHECKLIST_ITEMS,
   buildStreetViewUrl,
   formatCOP,
+  formatTitleCase,
   isListingUnavailable,
 } from '../utils/formatters';
 
@@ -42,12 +43,12 @@ export default function FavoritesView({
 
   return (
     <div className="space-y-6">
-      <div className="no-print flex flex-col gap-3 rounded-2xl border border-stoneLine bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="no-print flex flex-col gap-3 rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-serif text-xl font-bold text-ink">
             Modo Visita Presencial ({favorites.length})
           </h2>
-          <p className="mt-0.5 text-sm text-stone-600">
+          <p className="mt-0.5 text-sm text-stone-700">
             Marca los 5 puntos clave en cada visita y guarda tus notas directamente en Google Sheets.
           </p>
         </div>
@@ -55,7 +56,7 @@ export default function FavoritesView({
         <button
           type="button"
           onClick={() => window.print()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-sage px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sage/90"
+          className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-sage px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sage/90"
         >
           <Printer className="h-4 w-4" />
           <span>Imprimir / Guardar PDF</span>
@@ -112,8 +113,8 @@ function FavoriteVisitCard({
   };
 
   return (
-    <article className="print-card flex flex-col rounded-2xl border border-stoneLine bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stoneLine pb-4">
+    <article className="print-card flex flex-col rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200/75 pb-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-sage/10 px-2.5 py-0.5 text-xs font-bold text-sage">
@@ -150,12 +151,14 @@ function FavoriteVisitCard({
           )}
 
           <h3 className="mt-2 font-serif text-lg font-bold text-ink">
-            {listing.barrio} ·{' '}
-            {listing.operacion === 'venta'
-              ? formatCOP(listing.precioVenta)
-              : `${formatCOP(listing.totalMensual)}/mes`}
+            {formatTitleCase(listing.barrio)} ·{' '}
+            <span className="tabular-nums">
+              {listing.operacion === 'venta'
+                ? formatCOP(listing.precioVenta)
+                : `${formatCOP(listing.totalMensual)}/mes`}
+            </span>
           </h3>
-          <p className="text-xs text-stone-600">
+          <p className="text-xs text-stone-700">
             {listing.direccion !== 'No publicada' ? listing.direccion : `Zona ${listing.zona}`} ·{' '}
             {listing.area} m² · {listing.hab} hab · {listing.banos} baños · {listing.garajes} gar. · Estrato{' '}
             {listing.estrato}

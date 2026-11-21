@@ -6,6 +6,7 @@ import {
   FAMILY_LOCATIONS,
   buildStreetViewUrl,
   formatCOP,
+  formatTitleCase,
   haversineKm,
   isListingUnavailable,
 } from '../utils/formatters';
@@ -21,16 +22,16 @@ function createScorePin(score, operacion) {
   if (s >= 8.5) bg = '#2E5E4E';
   else if (s >= 6.5) bg = '#B45309';
 
-  const ring = operacion === 'venta' ? '2px solid #FFFFFF' : '2px solid #FEF3C7';
+  const outerRing = operacion === 'venta' ? 'rgba(255,255,255,0.92)' : 'rgba(254,243,199,0.95)';
   const html = `
     <div style="
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       border-radius: 9999px;
       background: ${bg};
       color: #ffffff;
-      border: ${ring};
-      box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+      border: 2.5px solid #FFFFFF;
+      box-shadow: 0 0 0 2px ${outerRing}, 0 4px 12px rgba(28,25,23,0.28);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -42,35 +43,35 @@ function createScorePin(score, operacion) {
   return L.divIcon({
     html,
     className: 'custom-radar-pin',
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-    popupAnchor: [0, -18],
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -20],
   });
 }
 
 function createFamilyPin(name) {
   const html = `
-    <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-85%);">
+    <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-88%);">
       <div style="
         background:#6D28D9;
         color:#FFFFFF;
-        border:2px solid #FFFFFF;
+        border:2.5px solid #FFFFFF;
         border-radius:9999px;
-        padding:3px 9px;
-        font-size:11px;
+        padding:3.5px 10px;
+        font-size:11.5px;
         font-weight:700;
         white-space:nowrap;
-        box-shadow:0 4px 12px rgba(109,40,217,0.4);
+        box-shadow:0 0 0 2px rgba(255,255,255,0.9), 0 6px 14px rgba(28,25,23,0.28);
         font-family:'Plus Jakarta Sans',sans-serif;
       ">★ ${name}</div>
       <div style="
-        width:10px;
-        height:10px;
+        width:11px;
+        height:11px;
         background:#6D28D9;
-        border:2px solid #FFFFFF;
+        border:2.5px solid #FFFFFF;
         border-radius:9999px;
-        margin-top:2px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.28);
+        margin-top:3px;
+        box-shadow:0 0 0 1.5px rgba(255,255,255,0.9), 0 3px 8px rgba(28,25,23,0.32);
       "></div>
     </div>
   `;
@@ -79,7 +80,7 @@ function createFamilyPin(name) {
     className: 'custom-radar-pin',
     iconSize: [0, 0],
     iconAnchor: [0, 0],
-    popupAnchor: [0, -34],
+    popupAnchor: [0, -36],
   });
 }
 
@@ -129,12 +130,12 @@ export default function MapView({ arriendos, ventas }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-2xl border border-stoneLine bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-2xl border border-stone-200/75 bg-white p-4 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div>
           <h2 className="font-serif text-xl font-bold text-ink">
             Mapa del Norte de Bogotá (Calle 100 a 153)
           </h2>
-          <p className="text-xs text-stone-600">
+          <p className="mt-0.5 text-xs text-stone-700">
             La línea punteada señala la Autopista Norte: a la derecha está la{' '}
             <strong>Zona Oriental</strong> y a la izquierda la <strong>Zona Occidental</strong>.
           </p>
@@ -153,10 +154,10 @@ export default function MapView({ arriendos, ventas }) {
               key={opt.id}
               type="button"
               onClick={() => setMode(opt.id)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+              className={`min-h-[42px] rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
                 mode === opt.id
-                  ? 'bg-sage text-white'
-                  : 'border border-stoneLine bg-ivory text-stone-700 hover:bg-stone-100'
+                  ? 'bg-sage text-white shadow-sm'
+                  : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
               }`}
             >
               {opt.label}
@@ -166,7 +167,7 @@ export default function MapView({ arriendos, ventas }) {
       </div>
 
       {/* Ubicaciones fijas de la familia */}
-      <div className="rounded-2xl border border-purple-200 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-purple-200/80 bg-white p-4 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
         <p className="mb-2.5 text-xs font-bold uppercase tracking-wider text-purple-900">
           Ubicaciones fijas de referencia familiar
         </p>
@@ -174,7 +175,7 @@ export default function MapView({ arriendos, ventas }) {
           {definedFamily.map((fam) => (
             <span
               key={fam.id}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-3 py-1.5 font-semibold text-purple-900"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200/80 bg-purple-50 px-3 py-1.5 font-semibold text-purple-900"
             >
               <Home className="h-3.5 w-3.5 text-purple-700" />
               <span>
@@ -191,22 +192,22 @@ export default function MapView({ arriendos, ventas }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-stone-600">
+      <div className="flex flex-wrap items-center gap-4 px-1 text-xs font-medium text-stone-700">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-sage" /> Puntaje 8.5 – 10 (Excelente)
+          <span className="h-3 w-3 rounded-full bg-sage ring-2 ring-white shadow-sm" /> Puntaje 8.5 – 10 (Excelente)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-amberWarm" /> Puntaje 6.5 – 8.4 (Buena)
+          <span className="h-3 w-3 rounded-full bg-amberWarm ring-2 ring-white shadow-sm" /> Puntaje 6.5 – 8.4 (Buena)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-stone-600" /> Puntaje &lt; 6.5 (Básica)
+          <span className="h-3 w-3 rounded-full bg-stone-600 ring-2 ring-white shadow-sm" /> Puntaje &lt; 6.5 (Básica)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-purple-700" /> Puntos familiares (Gloria / Ángela / Beatriz)
+          <span className="h-3 w-3 rounded-full bg-purple-700 ring-2 ring-white shadow-sm" /> Puntos familiares (Gloria / Ángela / Beatriz)
         </span>
       </div>
 
-      <div className="h-[560px] w-full overflow-hidden rounded-2xl border border-stoneLine bg-white shadow-sm">
+      <div className="h-[560px] w-full overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
         <MapContainer
           center={[4.696, -74.054]}
           zoom={12}
@@ -295,8 +296,10 @@ export default function MapView({ arriendos, ventas }) {
                       </span>
                     </div>
                     <div>
-                      <p className="font-serif text-sm font-bold text-ink">{item.barrio}</p>
-                      <p className="text-[11px] text-stone-500">
+                      <p className="font-serif text-sm font-bold text-ink">
+                        {formatTitleCase(item.barrio)}
+                      </p>
+                      <p className="text-[11px] text-stone-600">
                         {item.direccion !== 'No publicada'
                           ? item.direccion
                           : `Zona ${item.zona}`}

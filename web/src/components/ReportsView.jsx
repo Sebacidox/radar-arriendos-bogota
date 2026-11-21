@@ -13,7 +13,12 @@ import {
   Cell,
 } from 'recharts';
 import { TrendingDown, Clock, CheckCircle2 } from 'lucide-react';
-import { formatCOP, formatCompactCOP, isListingUnavailable } from '../utils/formatters';
+import {
+  formatCOP,
+  formatCompactCOP,
+  formatTitleCase,
+  isListingUnavailable,
+} from '../utils/formatters';
 
 export default function ReportsView({
   arriendos,
@@ -184,12 +189,12 @@ export default function ReportsView({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-2xl border border-stoneLine bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-serif text-2xl font-bold text-ink">
             Panorama del Mercado
           </h2>
-          <p className="mt-0.5 text-sm text-stone-600">
+          <p className="mt-0.5 text-sm text-stone-700">
             Lectura clara de precios, oportunidades y margen de negociación en Bogotá Norte.
           </p>
         </div>
@@ -198,10 +203,10 @@ export default function ReportsView({
           <button
             type="button"
             onClick={() => setMode('arriendo')}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+            className={`min-h-[42px] rounded-xl px-4 py-2 text-xs font-semibold transition ${
               !isVenta
                 ? 'bg-sage text-white shadow-sm'
-                : 'border border-stoneLine bg-ivory text-stone-700 hover:bg-stone-100'
+                : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
             }`}
           >
             Arriendos ({arriendos.length})
@@ -209,10 +214,10 @@ export default function ReportsView({
           <button
             type="button"
             onClick={() => setMode('venta')}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+            className={`min-h-[42px] rounded-xl px-4 py-2 text-xs font-semibold transition ${
               isVenta
                 ? 'bg-sage text-white shadow-sm'
-                : 'border border-stoneLine bg-ivory text-stone-700 hover:bg-stone-100'
+                : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
             }`}
           >
             Ventas ({ventas.length})
@@ -222,11 +227,11 @@ export default function ReportsView({
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Gráfica 1 */}
-        <section className="rounded-2xl border border-stoneLine bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
           <h3 className="font-serif text-lg font-bold text-ink">
             1. ¿Dónde rinde más el presupuesto?
           </h3>
-          <p className="mb-4 text-xs text-stone-500">
+          <p className="mb-4 text-xs text-stone-700">
             Precio promedio por metro cuadrado según barrio (menor valor = más área por tu dinero)
           </p>
 
@@ -235,25 +240,30 @@ export default function ReportsView({
               <BarChart
                 data={budgetChartData}
                 layout="vertical"
-                margin={{ top: 4, right: 24, left: 10, bottom: 4 }}
+                margin={{ top: 4, right: 24, left: 6, bottom: 4 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" />
                 <XAxis
                   type="number"
                   tickFormatter={(v) => formatCompactCOP(v)}
-                  tick={{ fontSize: 11, fill: '#57534E' }}
+                  tick={{ fontSize: 11, fill: '#44403C' }}
                 />
                 <YAxis
                   dataKey="barrio"
                   type="category"
-                  width={120}
-                  tick={{ fontSize: 11, fill: '#1C1917' }}
+                  width={168}
+                  tickFormatter={(v) => formatTitleCase(v)}
+                  tick={{ fontSize: 11.5, fill: '#1C1917' }}
                 />
                 <Tooltip
                   formatter={(v) => [`${formatCOP(v)} / m²`, 'Promedio $/m²']}
+                  labelFormatter={(label) => formatTitleCase(label)}
                   contentStyle={{
                     borderRadius: '12px',
+                    backgroundColor: '#FAF9F6',
                     borderColor: '#E7E5E4',
+                    boxShadow: '0 8px 24px -4px rgba(28, 25, 23, 0.12)',
+                    color: '#1C1917',
                     fontSize: '12px',
                   }}
                 />
@@ -271,21 +281,21 @@ export default function ReportsView({
 
           <p className="mt-3 rounded-xl bg-ivory p-3 text-xs leading-relaxed text-stone-700">
             {bestBarrio
-              ? `Conclusión: Hoy ${bestBarrio.barrio} ofrece el mejor rendimiento de presupuesto con un promedio de ${formatCOP(bestBarrio.promedioM2)}/m² (${bestBarrio.ofertas} oferta(s) activa(s)).`
+              ? `Conclusión: Hoy ${formatTitleCase(bestBarrio.barrio)} ofrece el mejor rendimiento de presupuesto con un promedio de ${formatCOP(bestBarrio.promedioM2)}/m² (${bestBarrio.ofertas} oferta(s) activa(s)).`
               : 'No hay suficientes datos agrupados por barrio para comparar todavía.'}
           </p>
         </section>
 
         {/* Gráfica 2 */}
-        <section className="rounded-2xl border border-stoneLine bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
           <h3 className="font-serif text-lg font-bold text-ink">
             2. Mapa de Oportunidades (Área vs. Precio)
           </h3>
-          <p className="mb-2 text-xs text-stone-500">
+          <p className="mb-2 text-xs text-stone-700">
             La recta punteada marca el promedio ({formatCOP(overallAvgM2)}/m²). Todo punto por debajo está a mejor precio que el promedio; haz clic en cualquier punto para ver el inmueble.
           </p>
 
-          <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] font-medium text-stone-600">
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-[11px] font-medium text-stone-700">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-sage" /> Debajo de la línea (oportunidad)
             </span>
@@ -307,14 +317,14 @@ export default function ReportsView({
                   name="Área"
                   unit=" m²"
                   domain={['dataMin - 2', 'dataMax + 2']}
-                  tick={{ fontSize: 11, fill: '#57534E' }}
+                  tick={{ fontSize: 11, fill: '#44403C' }}
                 />
                 <YAxis
                   type="number"
                   dataKey="y"
                   name="Precio"
                   tickFormatter={(v) => formatCompactCOP(v)}
-                  tick={{ fontSize: 11, fill: '#57534E' }}
+                  tick={{ fontSize: 11, fill: '#44403C' }}
                 />
                 <ZAxis range={[60, 110]} />
                 <Tooltip
@@ -325,12 +335,14 @@ export default function ReportsView({
                     }
                     const p = payload[0].payload;
                     return (
-                      <div className="rounded-xl border border-stoneLine bg-white p-2.5 text-xs shadow-lg">
-                        <p className="font-serif font-bold text-ink">{p.barrio}</p>
-                        <p className="text-stone-600">
+                      <div className="rounded-xl border border-stone-200/85 bg-ivory p-3 text-xs shadow-lg">
+                        <p className="font-serif font-bold text-ink">
+                          {formatTitleCase(p.barrio)}
+                        </p>
+                        <p className="mt-0.5 text-stone-700 tabular-nums">
                           {p.x} m² · {formatCOP(p.y)}
                         </p>
-                        <p className="font-semibold text-sage">
+                        <p className="mt-0.5 font-semibold text-sage tabular-nums">
                           {formatCOP(p.costoM2)} / m²
                         </p>
                       </div>
@@ -455,11 +467,11 @@ export default function ReportsView({
         </section>
 
         {/* Gráfica 4 */}
-        <section className="rounded-2xl border border-stoneLine bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)]">
           <h3 className="font-serif text-lg font-bold text-ink">
             4. Radiografía de Requisitos
           </h3>
-          <p className="mb-4 text-xs text-stone-500">
+          <p className="mb-4 text-xs text-stone-700">
             Porcentaje de apartamentos dentro de presupuesto que cumplen tus preferencias ideales
           </p>
 
@@ -477,13 +489,16 @@ export default function ReportsView({
                 <YAxis
                   domain={[0, 100]}
                   unit="%"
-                  tick={{ fontSize: 11, fill: '#57534E' }}
+                  tick={{ fontSize: 11, fill: '#44403C' }}
                 />
                 <Tooltip
                   formatter={(v) => [`${v}%`, 'Cumplimiento']}
                   contentStyle={{
                     borderRadius: '12px',
+                    backgroundColor: '#FAF9F6',
                     borderColor: '#E7E5E4',
+                    boxShadow: '0 8px 24px -4px rgba(28, 25, 23, 0.12)',
+                    color: '#1C1917',
                     fontSize: '12px',
                   }}
                 />

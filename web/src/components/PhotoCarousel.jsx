@@ -8,7 +8,7 @@ import {
   Clock,
   AlertOctagon,
 } from 'lucide-react';
-import { isListingUnavailable } from '../utils/formatters';
+import { formatTitleCase, isListingUnavailable } from '../utils/formatters';
 import {
   BOGOTA_2026,
   getPortalDuplicationRate,
@@ -63,64 +63,69 @@ export default function PhotoCarousel({ listing }) {
   };
 
   return (
-    <div className="relative h-56 w-full overflow-hidden rounded-t-2xl bg-stone-100">
+    <div className="group relative h-56 w-full overflow-hidden rounded-t-2xl bg-stone-100">
       {currentUrl ? (
-        <img
-          src={currentUrl}
-          alt={`Apartamento en ${listing.barrio}`}
-          loading="lazy"
-          onError={() => {
-            setFailedUrls((prev) => ({ ...prev, [currentUrl]: true }));
-            setIndex(0);
-          }}
-          className="h-full w-full object-cover transition duration-300"
-        />
+        <>
+          <img
+            key={currentUrl}
+            src={currentUrl}
+            alt={`Apartamento en ${formatTitleCase(listing.barrio)}`}
+            loading="lazy"
+            onError={() => {
+              setFailedUrls((prev) => ({ ...prev, [currentUrl]: true }));
+              setIndex(0);
+            }}
+            className="h-full w-full object-cover transition-all duration-300 ease-out group-hover:scale-[1.02]"
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-stone-900/35 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-stone-900/30 to-transparent" />
+        </>
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-stone-100 via-ivory to-stone-200 px-4 text-center">
           <Building2 className="mb-2 h-10 w-10 text-sage/60" />
           <p className="font-serif text-sm font-semibold text-ink">
-            {listing.barrio || 'Bogotá Norte'}
+            {formatTitleCase(listing.barrio) || 'Bogotá Norte'}
           </p>
-          <p className="mt-0.5 text-xs text-stone-500">
+          <p className="mt-0.5 text-xs text-stone-600">
             Foto no disponible temporalmente · Ver en portal
           </p>
         </div>
       )}
 
       {/* Etiquetas flotantes */}
-      <div className="pointer-events-none absolute left-3 top-3 flex max-w-[68%] flex-wrap gap-1.5">
+      <div className="pointer-events-none absolute left-3 top-3 flex max-w-[66%] flex-wrap gap-1.5">
         {isUnavailable && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold text-white shadow">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-red-700/90 px-2.5 py-1 text-xs font-semibold text-white shadow backdrop-blur-md">
             <AlertOctagon className="h-3 w-3" />
             Ya no disponible en el portal
           </span>
         )}
         {isManual && !isUnavailable && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-purple-700 px-2.5 py-1 text-xs font-semibold text-white shadow">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-purple-700/90 px-2.5 py-1 text-xs font-semibold text-white shadow backdrop-blur-md">
             <Sparkles className="h-3 w-3" />
             Aviso propio
           </span>
         )}
         {isNuevo && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-sage px-2.5 py-1 text-xs font-semibold text-white shadow">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-sage/90 px-2.5 py-1 text-xs font-semibold text-white shadow backdrop-blur-md">
             <Sparkles className="h-3 w-3" />
             Nuevo esta semana
           </span>
         )}
         {isBajo && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white shadow">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-emerald-700/90 px-2.5 py-1 text-xs font-semibold text-white shadow backdrop-blur-md">
             <TrendingDown className="h-3 w-3" />
             {dropPct > 0 ? `Bajó ${dropPct}%` : 'Bajó de precio'}
           </span>
         )}
         {isHighMargin && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-800 px-2.5 py-1 text-xs font-semibold text-white shadow">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-emerald-800/90 px-2.5 py-1 text-xs font-semibold text-white shadow backdrop-blur-md">
             <Clock className="h-3 w-3" />
             {dias} días en vitrina · Alto margen
           </span>
         )}
         {isModerateAge && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amberWarm px-2.5 py-1 text-xs font-semibold text-white shadow">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-amberWarm/90 px-2.5 py-1 text-xs font-semibold text-white shadow backdrop-blur-md">
             <Clock className="h-3 w-3" />
             {dias} días publicado
           </span>
@@ -129,7 +134,7 @@ export default function PhotoCarousel({ listing }) {
 
       {/* Fuente */}
       {listing.fuente && (
-        <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-ink/75 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+        <span className="pointer-events-none absolute right-3 top-3 rounded-full border border-white/15 bg-stone-900/75 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm backdrop-blur-md">
           {listing.fuente}
           {dupRate >= 0.3 ? ` · ${Math.round(dupRate * 100)}% rep.` : ''}
         </span>
@@ -142,7 +147,7 @@ export default function PhotoCarousel({ listing }) {
             type="button"
             onClick={handlePrev}
             aria-label="Foto anterior"
-            className="absolute left-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow transition hover:bg-white"
+            className="absolute left-2.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/50 bg-white/90 text-ink shadow-md backdrop-blur-md transition hover:scale-105 hover:bg-white"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -150,11 +155,11 @@ export default function PhotoCarousel({ listing }) {
             type="button"
             onClick={handleNext}
             aria-label="Foto siguiente"
-            className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow transition hover:bg-white"
+            className="absolute right-2.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/50 bg-white/90 text-ink shadow-md backdrop-blur-md transition hover:scale-105 hover:bg-white"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
-          <span className="pointer-events-none absolute bottom-2.5 right-3 rounded-full bg-ink/75 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+          <span className="pointer-events-none absolute bottom-2.5 right-3 rounded-full border border-white/15 bg-stone-900/75 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-white shadow-sm backdrop-blur-md">
             {(index % total) + 1} / {total}
           </span>
         </>

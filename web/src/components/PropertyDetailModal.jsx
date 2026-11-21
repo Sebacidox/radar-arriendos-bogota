@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, ExternalLink, Eye, Heart, MapPin, ShieldCheck } from 'lucide-react';
-import { buildStreetViewUrl, formatCOP } from '../utils/formatters';
+import { buildStreetViewUrl, formatCOP, formatTitleCase } from '../utils/formatters';
 
 export default function PropertyDetailModal({
   listing,
@@ -20,15 +20,17 @@ export default function PropertyDetailModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-stoneLine bg-white shadow-2xl">
-        <div className="flex items-start justify-between border-b border-stoneLine bg-ivory px-5 py-4">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between border-b border-stone-200/75 bg-ivory px-6 py-4 sm:py-5">
           <div>
             <span className="rounded-full bg-sage/10 px-2.5 py-0.5 text-xs font-bold text-sage">
               {listing.operacion === 'venta' ? 'Venta' : 'Arriendo'} · Puntuación{' '}
               {Number(listing.score).toFixed(1)}
             </span>
-            <h3 className="mt-1.5 font-serif text-xl font-bold text-ink">{listing.barrio}</h3>
-            <p className="mt-0.5 flex items-center gap-1 text-xs text-stone-500">
+            <h3 className="mt-1.5 font-serif text-xl font-bold text-ink">
+              {formatTitleCase(listing.barrio)}
+            </h3>
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-stone-700">
               <MapPin className="h-3.5 w-3.5" />
               {listing.direccion !== 'No publicada' ? listing.direccion : `Zona ${listing.zona}`}
             </p>
@@ -36,13 +38,14 @@ export default function PropertyDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-stoneLine bg-white p-1.5 text-stone-500 hover:text-ink"
+            aria-label="Cerrar detalle"
+            className="flex min-h-[42px] min-w-[42px] items-center justify-center rounded-xl border border-stone-200/80 bg-white text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-ink"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="space-y-4 p-5 text-sm">
+        <div className="flex-1 space-y-4 overflow-y-auto p-6 text-sm">
           {listing.fotos?.[0] && (
             <img
               src={listing.fotos[0]}

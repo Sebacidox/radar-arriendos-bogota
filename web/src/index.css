@@ -7,10 +7,21 @@ html {
   background-color: #faf9f6;
   color: #1c1917;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 html.text-large {
   font-size: 19.2px;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 .leaflet-container {
@@ -19,9 +30,10 @@ html.text-large {
 }
 
 .leaflet-popup-content-wrapper {
-  border-radius: 0.75rem;
-  border: 1px solid #e7e5e4;
-  box-shadow: 0 10px 25px -5px rgba(28, 25, 23, 0.12);
+  border-radius: 0.9rem;
+  border: 1px solid rgba(231, 229, 228, 0.85);
+  background: #ffffff;
+  box-shadow: 0 12px 28px -6px rgba(28, 25, 23, 0.14);
 }
 
 .custom-radar-pin {

@@ -26,6 +26,7 @@ import {
   estimateUtilitiesByStratum,
   formatCOP,
   formatCompactCOP,
+  formatTitleCase,
   getScoreDescriptor,
   isListingUnavailable,
 } from '../utils/formatters';
@@ -105,22 +106,24 @@ export default function PropertyCard({
 
   const activeEval = isVenta ? evalCompra : evalArriendo;
   const pctAbs = Math.round(Math.abs(activeEval?.diffPct || 0) * 100);
+  const displayBarrio = formatTitleCase(listing.barrio) || 'Bogotá Norte';
+  const benchmarkBarrioLabel = formatTitleCase(benchmark.barrioLabel) || 'el sector';
   const semaforoHeadline = (() => {
     if (!activeEval) return 'Precio de referencia';
     if (activeEval.color === 'alerta_antifraude') {
-      return `🔴 PRECIO SOSPECHOSAMENTE BAJO (-${pctAbs}%) · Revisa el Escudo`;
+      return `🔴 Precio sospechosamente bajo (-${pctAbs}%) · Revisa el Escudo`;
     }
     if (activeEval.color === 'verde') {
-      return `🟢 OPORTUNIDAD REAL · ${pctAbs}% debajo de la mediana de ${benchmark.barrioLabel}`;
+      return `🟢 Oportunidad real · ${pctAbs}% debajo de la mediana de ${benchmarkBarrioLabel}`;
     }
     if (activeEval.color === 'rojo') {
-      return `🔴 SOBREPRECIO NEGOCIABLE · ${pctAbs}% arriba de ${benchmark.barrioLabel}`;
+      return `🔴 Sobreprecio negociable · ${pctAbs}% arriba de ${benchmarkBarrioLabel}`;
     }
     if (pctAbs <= 2) {
-      return `🟡 PRECIO DE MERCADO · Alineado con ${benchmark.barrioLabel}`;
+      return `🟡 Precio de mercado · Alineado con ${benchmarkBarrioLabel}`;
     }
     const dir = (activeEval.diffPct || 0) < 0 ? 'debajo' : 'arriba';
-    return `🟡 PRECIO DE MERCADO (${pctAbs}% ${dir} de ${benchmark.barrioLabel})`;
+    return `🟡 Precio de mercado (${pctAbs}% ${dir} de ${benchmarkBarrioLabel})`;
   })();
 
   const streetViewUrl = buildStreetViewUrl(listing.lat, listing.lng);
@@ -165,8 +168,10 @@ export default function PropertyCard({
 
   return (
     <article
-      className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${
-        isDiscarded ? 'border-stone-200 opacity-80' : 'border-stoneLine'
+      className={`flex flex-col overflow-hidden rounded-2xl border bg-white transition duration-200 ${
+        isDiscarded
+          ? 'border-stone-200/70 opacity-80 shadow-none'
+          : 'border-stone-200/75 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] hover:shadow-[0_10px_28px_-8px_rgba(28,25,23,0.11)]'
       }`}
     >
       <PhotoCarousel listing={listing} />
@@ -181,13 +186,13 @@ export default function PropertyCard({
                   scoreInfo.tone === 'sage'
                     ? 'bg-sage/12 text-sage'
                     : scoreInfo.tone === 'amber'
-                      ? 'bg-amber-100 text-amberWarm'
+                      ? 'bg-amber-100/90 text-amberWarm'
                       : 'bg-stone-100 text-stone-700'
                 }`}
               >
                 {Number(listing.score).toFixed(1)} · {scoreInfo.label}
               </span>
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-600">
+              <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-700">
                 Estrato {listing.meta?.estratoOficial || listing.estrato}
                 {listing.meta?.estratoOficial ? ' · IDECA ✓' : ''}
               </span>
@@ -205,11 +210,11 @@ export default function PropertyCard({
               )}
             </div>
 
-            <h2 className="mt-2 font-serif text-xl font-bold leading-snug text-ink">
-              {listing.barrio || 'Bogotá Norte'}
+            <h2 className="mt-2 font-serif text-xl font-bold leading-snug tracking-tight text-ink">
+              {displayBarrio}
             </h2>
-            <p className="mt-0.5 flex items-center gap-1 text-xs text-stone-500">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-stone-700">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-stone-500" />
               <span className="truncate">
                 {listing.direccion && listing.direccion !== 'No publicada'
                   ? listing.direccion
@@ -223,7 +228,7 @@ export default function PropertyCard({
               type="button"
               onClick={() => onDeleteManual(listing)}
               title="Eliminar este aviso propio"
-              className="rounded-lg p-1.5 text-stone-400 transition hover:bg-red-50 hover:text-red-700"
+              className="flex min-h-[42px] min-w-[42px] items-center justify-center rounded-xl text-stone-500 transition hover:bg-red-50 hover:text-red-700"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -239,7 +244,7 @@ export default function PropertyCard({
 
         {/* Semáforo de Precio Real 2026 */}
         <div
-          className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${
+          className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold leading-snug ${
             SEMAFORO_STYLES[activeEval?.color || 'amarillo']
           }`}
         >
@@ -247,7 +252,7 @@ export default function PropertyCard({
         </div>
 
         {/* Métricas físicas */}
-        <div className="mt-3.5 grid grid-cols-4 gap-2 rounded-xl border border-stoneLine/80 bg-ivory/60 px-3 py-2.5 text-center text-xs">
+        <div className="mt-3.5 grid grid-cols-4 gap-2 rounded-xl border border-stone-200/65 bg-ivory/80 px-3 py-2.5 text-center text-xs">
           <div className="flex flex-col items-center">
             <Maximize2 className="mb-1 h-3.5 w-3.5 text-sage" />
             <span className="font-bold text-ink">{listing.area} m²</span>
@@ -268,14 +273,14 @@ export default function PropertyCard({
 
         {/* Desglose financiero inteligente 2026 */}
         {isVenta && evalCompra ? (
-          <div className="mt-4 rounded-xl border border-stoneLine bg-ivory/40 p-3.5">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs font-medium text-stone-600">Precio pedido</span>
+          <div className="mt-4 rounded-xl border border-stone-200/65 bg-ivory/55 p-3.5 tabular-nums">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-medium text-stone-700">Precio pedido</span>
               <span className="font-serif text-xl font-bold text-ink">
                 {formatCOP(listing.precioVenta)}
               </span>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-stone-600">
+            <div className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-stone-700">
               <span>Valor por m²:</span>
               <span className="text-right font-semibold text-ink">
                 {formatCOP(evalCompra.precioPedidoM2 || listing.costoM2)}/m²
@@ -302,7 +307,7 @@ export default function PropertyCard({
                 {listing.antiguedad}
               </span>
             </div>
-            <div className="mt-2.5 flex items-baseline justify-between border-t border-stoneLine/70 pt-2 text-xs">
+            <div className="mt-2.5 flex items-baseline justify-between border-t border-stone-200/70 pt-2 text-xs">
               <span className="font-bold text-sage">
                 Costo real con cierre{evalCompra.costoRemodelacion > 0 ? ' y arreglos' : ''}:
               </span>
@@ -321,16 +326,16 @@ export default function PropertyCard({
             />
           </div>
         ) : evalArriendo ? (
-          <div className="mt-4 rounded-xl border border-stoneLine bg-ivory/40 p-3.5">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs font-medium text-stone-600">
+          <div className="mt-4 rounded-xl border border-stone-200/65 bg-ivory/55 p-3.5 tabular-nums">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-medium text-stone-700">
                 Canon + Admin
               </span>
               <span className="font-serif text-xl font-bold text-ink">
                 {formatCOP(listing.canon + listing.admin)}
               </span>
             </div>
-            <div className="mt-2 space-y-1 text-xs text-stone-600">
+            <div className="mt-2 space-y-1 text-xs text-stone-700">
               <div className="flex justify-between">
                 <span>Canon: {formatCOP(listing.canon)}</span>
                 <span>
@@ -342,7 +347,7 @@ export default function PropertyCard({
                   Servicios est. (E{listing.meta?.estratoOficial || listing.estrato}
                   {evalArriendo.extraCalentador > 0 ? ', eléctrico' : ', gas'}):
                 </span>
-                <span className="font-medium text-stone-700">
+                <span className="font-medium text-ink">
                   {formatCOP(utilitiesEst + evalArriendo.extraCalentador)}
                 </span>
               </div>
@@ -352,13 +357,13 @@ export default function PropertyCard({
                     ? 'Trato directo (trámites entrada):'
                     : 'Trámites agencia prorrateados (12m):'}
                 </span>
-                <span className="font-medium text-stone-700">
+                <span className="font-medium text-ink">
                   {interlocutor === 'dueno_directo'
                     ? '$0'
                     : `+${formatCOP(evalArriendo.ingresoProrrateado)}`}
                 </span>
               </div>
-              <div className="flex justify-between border-t border-stoneLine/70 pt-1.5 font-bold text-sage">
+              <div className="flex justify-between border-t border-stone-200/70 pt-1.5 font-bold text-sage">
                 <span>Esto es lo que realmente te cuesta:</span>
                 <span>{formatCOP(evalArriendo.flujoBolsilloMensual)}/mes</span>
               </div>
@@ -377,7 +382,7 @@ export default function PropertyCard({
             {greenPills.map((pill) => (
               <span
                 key={pill}
-                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-sage"
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-50/90 px-2.5 py-1 text-[11px] font-medium text-sage"
               >
                 <CheckCircle2 className="h-3 w-3 shrink-0" />
                 {pill}
@@ -389,7 +394,7 @@ export default function PropertyCard({
               {amberPills.map((pill) => (
                 <span
                   key={pill}
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amberWarm"
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-50/90 px-2.5 py-1 text-[11px] font-medium text-amberWarm"
                 >
                   <AlertTriangle className="h-3 w-3 shrink-0" />
                   {pill}
@@ -402,7 +407,7 @@ export default function PropertyCard({
               {extraComfortTags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-md border border-stoneLine bg-white px-2 py-0.5 text-[11px] font-medium text-stone-600"
+                  className="rounded-md border border-stone-200/75 bg-white px-2 py-0.5 text-[11px] font-medium text-stone-700"
                 >
                   {tag}
                 </span>
@@ -411,93 +416,94 @@ export default function PropertyCard({
           )}
         </div>
 
-        {/* Botón principal Centro de Decisión (3 pasos) */}
-        {onOpenDecision && (
-          <button
-            type="button"
-            onClick={() => onOpenDecision(listing)}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sage px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-sage/90"
-          >
-            <ShieldCheck className="h-4 w-4" />
-            <span>Analizar, Verificar y Ofertar</span>
-          </button>
-        )}
+        {/* Jerarquía de acciones en 3 niveles claros */}
+        <div className="mt-auto space-y-2.5 pt-5">
+          {/* Nivel 1: Botón principal único */}
+          {onOpenDecision && (
+            <button
+              type="button"
+              onClick={() => onOpenDecision(listing)}
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-sage px-4 py-2.5 text-xs font-bold text-white shadow-[0_4px_12px_-2px_rgba(46,94,78,0.32)] transition hover:bg-sage/90"
+            >
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              <span>Analizar, Verificar y Ofertar</span>
+            </button>
+          )}
 
-        {/* Acciones de estado (Sheets) */}
-        <div className="mt-3 grid grid-cols-3 gap-2 border-t border-stoneLine pt-3">
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() =>
-              onSetEstadoVisita(listing, isLiked ? '' : 'Nos gusta')
-            }
-            className={`inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-semibold transition ${
-              isLiked
-                ? 'border-rose-300 bg-rose-50 text-rose-700'
-                : 'border-stoneLine bg-white text-stone-700 hover:border-rose-200 hover:bg-rose-50/50'
-            }`}
-          >
-            <Heart className={`h-3.5 w-3.5 ${isLiked ? 'fill-rose-600 text-rose-600' : ''}`} />
-            <span>Nos gusta</span>
-          </button>
+          {/* Nivel 2: Fila segmentada de decisión rápida */}
+          <div className="grid grid-cols-3 gap-1 rounded-xl border border-stone-200/80 bg-stone-50/85 p-1">
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() =>
+                onSetEstadoVisita(listing, isLiked ? '' : 'Nos gusta')
+              }
+              className={`inline-flex min-h-[42px] items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+                isLiked
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-stone-700 hover:bg-white hover:text-rose-700'
+              }`}
+            >
+              <Heart className={`h-3.5 w-3.5 shrink-0 ${isLiked ? 'fill-white text-white' : ''}`} />
+              <span>Nos gusta</span>
+            </button>
 
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() =>
-              onSetEstadoVisita(listing, isScheduled ? '' : 'Agendar visita')
-            }
-            className={`inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-semibold transition ${
-              isScheduled
-                ? 'border-sage bg-sage text-white'
-                : 'border-stoneLine bg-white text-stone-700 hover:border-sage/40 hover:bg-emerald-50/50'
-            }`}
-          >
-            <Phone className="h-3.5 w-3.5" />
-            <span>Visita</span>
-          </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() =>
+                onSetEstadoVisita(listing, isScheduled ? '' : 'Agendar visita')
+              }
+              className={`inline-flex min-h-[42px] items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+                isScheduled
+                  ? 'bg-sage text-white shadow-sm'
+                  : 'text-stone-700 hover:bg-white hover:text-sage'
+              }`}
+            >
+              <Phone className="h-3.5 w-3.5 shrink-0" />
+              <span>Visita</span>
+            </button>
 
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() =>
-              onSetEstadoVisita(listing, isDiscarded ? '' : 'Descartado')
-            }
-            className={`inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-semibold transition ${
-              isDiscarded
-                ? 'border-stone-400 bg-stone-200 text-ink'
-                : 'border-stoneLine bg-white text-stone-600 hover:border-stone-400 hover:bg-stone-100'
-            }`}
-          >
-            <X className="h-3.5 w-3.5" />
-            <span>{isDiscarded ? 'Restaurar' : 'Descartar'}</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() =>
+                onSetEstadoVisita(listing, isDiscarded ? '' : 'Descartado')
+              }
+              className={`inline-flex min-h-[42px] items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+                isDiscarded
+                  ? 'bg-ink text-white shadow-sm'
+                  : 'text-stone-700 hover:bg-white hover:text-ink'
+              }`}
+            >
+              <X className="h-3.5 w-3.5 shrink-0" />
+              <span>{isDiscarded ? 'Restaurar' : 'Descartar'}</span>
+            </button>
+          </div>
 
-        {/* Acciones secundarias */}
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => onToggleCompare(listing)}
-            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold transition ${
-              isCompared
-                ? 'bg-ink text-white'
-                : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-            }`}
-          >
-            <GitCompareArrows className="h-3.5 w-3.5" />
-            <span>{isCompared ? 'En comparador' : 'Comparar'}</span>
-          </button>
+          {/* Nivel 3: Barra inferior minimalista de utilidades en una sola línea */}
+          <div className="flex items-center justify-between gap-1 border-t border-stone-200/60 pt-2 text-[11px]">
+            <button
+              type="button"
+              onClick={() => onToggleCompare(listing)}
+              className={`inline-flex min-h-[38px] items-center gap-1 rounded-lg px-2 py-1 font-semibold transition ${
+                isCompared
+                  ? 'bg-ink text-white'
+                  : 'text-stone-700 hover:bg-stone-100 hover:text-ink'
+              }`}
+            >
+              <GitCompareArrows className="h-3.5 w-3.5 shrink-0" />
+              <span>{isCompared ? 'Comparando' : 'Comparar'}</span>
+            </button>
 
-          <div className="flex flex-wrap items-center gap-1.5">
             <a
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 font-semibold text-sage transition hover:bg-emerald-100"
+              className="inline-flex min-h-[38px] items-center gap-1 rounded-lg px-2 py-1 font-semibold text-sage transition hover:bg-emerald-50"
             >
-              <MessageCircle className="h-3.5 w-3.5" />
-              <span>WhatsApp familia</span>
+              <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+              <span>WhatsApp</span>
             </a>
 
             {streetViewUrl && (
@@ -505,9 +511,9 @@ export default function PropertyCard({
                 href={streetViewUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg bg-stone-100 px-2.5 py-1.5 font-semibold text-stone-700 transition hover:bg-stone-200"
+                className="inline-flex min-h-[38px] items-center gap-1 rounded-lg px-2 py-1 font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-ink"
               >
-                <Eye className="h-3.5 w-3.5" />
+                <Eye className="h-3.5 w-3.5 shrink-0" />
                 <span>Street View</span>
               </a>
             )}
@@ -517,9 +523,9 @@ export default function PropertyCard({
                 href={primaryLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg border border-stoneLine px-2.5 py-1.5 font-semibold text-ink transition hover:bg-stone-50"
+                className="inline-flex min-h-[38px] items-center gap-1 rounded-lg px-2 py-1 font-semibold text-ink transition hover:bg-stone-100"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                 <span>Portal</span>
               </a>
             )}

@@ -118,7 +118,7 @@ export default function MejorasView({ mejoras = [], onSubmitMejora }) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-stoneLine bg-white p-5 shadow-sm sm:p-6">
+      <section className="rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-sage">
@@ -128,7 +128,7 @@ export default function MejorasView({ mejoras = [], onSubmitMejora }) {
             <h2 className="mt-1 font-serif text-2xl font-bold text-ink">
               ¿Qué te gustaría mejorar o qué no funcionó bien?
             </h2>
-            <p className="mt-1 text-sm text-stone-600">
+            <p className="mt-1 text-sm text-stone-700">
               Todo lo que envíen aquí queda anotado en Google Sheets y le llega por correo a
               Sebastián para ajustarlo pronto.
             </p>
@@ -145,7 +145,7 @@ export default function MejorasView({ mejoras = [], onSubmitMejora }) {
         <section className="lg:col-span-6">
           <form
             onSubmit={handleSubmit}
-            className="space-y-5 rounded-2xl border border-stoneLine bg-white p-5 shadow-sm sm:p-6"
+            className="space-y-5 rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] sm:p-6"
           >
             <div>
               <label className="block text-sm font-bold text-ink">
@@ -159,10 +159,10 @@ export default function MejorasView({ mejoras = [], onSubmitMejora }) {
                       key={nombre}
                       type="button"
                       onClick={() => handleSelectAutor(nombre)}
-                      className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition ${
+                      className={`min-h-[42px] rounded-xl border px-3.5 py-2 text-sm font-semibold transition ${
                         active
                           ? 'border-sage bg-sage text-white shadow-sm'
-                          : 'border-stoneLine bg-ivory text-stone-700 hover:border-sage/40 hover:text-ink'
+                          : 'border-stone-200/80 bg-ivory text-stone-700 hover:border-sage/40 hover:text-ink'
                       }`}
                     >
                       {nombre}

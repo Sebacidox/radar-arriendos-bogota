@@ -318,3 +318,21 @@ export function isListingUnavailable(listing) {
   const est = String(listing?.estado || '').toUpperCase();
   return est.includes('NO DISPONIBLE') || est.includes('NO DETECTADO');
 }
+
+const LOWERCASE_WORDS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'con', 'a']);
+
+/** Formatea nombres de barrios en Title Case elegante sin alterar los datos originales. */
+export function formatTitleCase(text) {
+  if (!text) return '';
+  const cleaned = String(text).trim().replace(/\s+/g, ' ');
+  if (!cleaned) return '';
+  return cleaned
+    .toLowerCase()
+    .split(' ')
+    .map((word, idx) => {
+      if (!word) return '';
+      if (idx > 0 && LOWERCASE_WORDS.has(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
