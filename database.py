@@ -8,7 +8,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
-from config import DB_PATH
+from config import ADJUSTMENT_MAX_FOTOS, DB_PATH
 from filters import clean_fotos
 from models import EvaluatedListing
 from scoring import calculate_score
@@ -68,8 +68,17 @@ def deduplicate_listings(listings: list[EvaluatedListing]) -> list[EvaluatedList
             existing.zona = item.zona
         if (not existing.antiguedad or existing.antiguedad == "No especificada") and item.antiguedad:
             existing.antiguedad = item.antiguedad
+        if item.categoria_filtro == "exacto" and existing.categoria_filtro != "exacto":
+            existing.categoria_filtro = "exacto"
+            existing.motivos_ajuste = ""
+
+        fotos_limit = (
+            ADJUSTMENT_MAX_FOTOS if existing.categoria_filtro == "ajuste_razonable" else None
+        )
         if item.fotos and (not existing.fotos or len(item.fotos) > len(existing.fotos)):
-            existing.fotos = clean_fotos(item.fotos)
+            existing.fotos = clean_fotos(item.fotos, limit=fotos_limit)
+        elif existing.fotos and fotos_limit is not None:
+            existing.fotos = clean_fotos(existing.fotos, limit=fotos_limit)
         existing.etiquetas_confort = _merge_comfort_tags(
             existing.etiquetas_confort, item.etiquetas_confort
         )
@@ -158,7 +167,9 @@ class DatabaseManager:
                     etiquetas_confort TEXT NOT NULL DEFAULT '',
                     fecha_primera_deteccion TEXT NOT NULL,
                     fecha_ultima_deteccion TEXT NOT NULL,
-                    activo INTEGER NOT NULL DEFAULT 1
+                    activo INTEGER NOT NULL DEFAULT 1,
+                    categoria_filtro TEXT NOT NULL DEFAULT 'exacto',
+                    motivos_ajuste TEXT NOT NULL DEFAULT ''
                 );
 
                 CREATE TABLE IF NOT EXISTS inmueble_urls (
@@ -194,6 +205,10 @@ class DatabaseManager:
                 conn.execute("ALTER TABLE inmuebles ADD COLUMN antiguedad TEXT NOT NULL DEFAULT ''")
             if "etiquetas_confort" not in cols:
                 conn.execute("ALTER TABLE inmuebles ADD COLUMN etiquetas_confort TEXT NOT NULL DEFAULT ''")
+            if "categoria_filtro" not in cols:
+                conn.execute("ALTER TABLE inmuebles ADD COLUMN categoria_filtro TEXT NOT NULL DEFAULT 'exacto'")
+            if "motivos_ajuste" not in cols:
+                conn.execute("ALTER TABLE inmuebles ADD COLUMN motivos_ajuste TEXT NOT NULL DEFAULT ''")
 
             run_cols = {row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
             if "operacion" not in run_cols:
@@ -256,8 +271,11 @@ class DatabaseManager:
                     item.fecha_ultima_deteccion = today_str
                     item.dias_en_mercado = 0
 
+                    fotos_limit = (
+                        ADJUSTMENT_MAX_FOTOS if item.categoria_filtro == "ajuste_razonable" else None
+                    )
                     links_json = json.dumps(item.portales_enlaces, ensure_ascii=False)
-                    fotos_json = json.dumps(clean_fotos(item.fotos), ensure_ascii=False)
+                    fotos_json = json.dumps(clean_fotos(item.fotos, limit=fotos_limit), ensure_ascii=False)
                     conn.execute(
                         """
                         INSERT INTO inmuebles (
@@ -266,8 +284,9 @@ class DatabaseManager:
                             estrato, canon, precio_venta, administracion, costo_total, admin_estimada_flag,
                             cocina_abierta, balcon, costo_m2, score, estado, ahorro_cop,
                             portales_enlaces_json, fotos_json, antiguedad, etiquetas_confort,
-                            fecha_primera_deteccion, fecha_ultima_deteccion, activo
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                            fecha_primera_deteccion, fecha_ultima_deteccion, activo,
+                            categoria_filtro, motivos_ajuste
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                         """,
                         (
                             item.fingerprint,
@@ -302,6 +321,8 @@ class DatabaseManager:
                             item.etiquetas_confort,
                             item.fecha_primera_deteccion,
                             item.fecha_ultima_deteccion,
+                            item.categoria_filtro,
+                            item.motivos_ajuste,
                         ),
                     )
                     conn.execute(
@@ -325,11 +346,14 @@ class DatabaseManager:
                         item.fecha_primera_deteccion, today_str
                     )
 
+                    fotos_limit = (
+                        ADJUSTMENT_MAX_FOTOS if item.categoria_filtro == "ajuste_razonable" else None
+                    )
                     prev_fotos = json.loads(prev.get("fotos_json") or "[]")
                     if (not item.fotos and prev_fotos) or (len(prev_fotos) > len(item.fotos) and len(item.fotos) <= 5):
-                        item.fotos = clean_fotos(prev_fotos)
+                        item.fotos = clean_fotos(prev_fotos, limit=fotos_limit)
                     else:
-                        item.fotos = clean_fotos(item.fotos)
+                        item.fotos = clean_fotos(item.fotos, limit=fotos_limit)
                     if (not item.antiguedad or item.antiguedad == "No especificada") and prev.get("antiguedad"):
                         item.antiguedad = prev["antiguedad"]
                     item.etiquetas_confort = _merge_comfort_tags(
@@ -400,7 +424,9 @@ class DatabaseManager:
                             antiguedad = ?,
                             etiquetas_confort = ?,
                             fecha_ultima_deteccion = ?,
-                            activo = 1
+                            activo = 1,
+                            categoria_filtro = ?,
+                            motivos_ajuste = ?
                         WHERE fingerprint = ?
                         """,
                         (
@@ -423,10 +449,12 @@ class DatabaseManager:
                             item.estado,
                             item.ahorro_cop,
                             json.dumps(item.portales_enlaces, ensure_ascii=False),
-                            json.dumps(clean_fotos(item.fotos), ensure_ascii=False),
+                            json.dumps(clean_fotos(item.fotos, limit=fotos_limit), ensure_ascii=False),
                             item.antiguedad,
                             item.etiquetas_confort,
                             item.fecha_ultima_deteccion,
+                            item.categoria_filtro,
+                            item.motivos_ajuste,
                             matched_fp,
                         ),
                     )
@@ -473,6 +501,11 @@ class DatabaseManager:
                             tuple(x) for x in json.loads(prev["portales_enlaces_json"])
                         ]
                         prev_fotos = json.loads(prev.get("fotos_json") or "[]")
+                        prev_cat = prev.get("categoria_filtro") or "exacto"
+                        prev_motivos = prev.get("motivos_ajuste") or ""
+                        prev_limit = (
+                            ADJUSTMENT_MAX_FOTOS if prev_cat == "ajuste_razonable" else None
+                        )
                         processed_active.append(
                             EvaluatedListing(
                                 fingerprint=fp,
@@ -507,12 +540,14 @@ class DatabaseManager:
                                 operacion=prev.get("operacion") or operacion,
                                 precio_venta=int(prev.get("precio_venta") or 0),
                                 tiene_ascensor=True,
-                                fotos=clean_fotos(prev_fotos),
+                                fotos=clean_fotos(prev_fotos, limit=prev_limit),
                                 antiguedad=prev.get("antiguedad") or "",
                                 dias_en_mercado=_compute_days_in_market(
                                     prev["fecha_primera_deteccion"], today_str
                                 ),
                                 etiquetas_confort=prev.get("etiquetas_confort") or "",
+                                categoria_filtro=prev_cat,
+                                motivos_ajuste=prev_motivos,
                             )
                         )
                     elif availability == "UNAVAILABLE":
@@ -551,20 +586,37 @@ class DatabaseManager:
 
         return processed_active
 
-    def get_full_history(self, operacion: str = "arriendo") -> list[dict]:
+    def get_full_history(
+        self,
+        operacion: str = "arriendo",
+        categoria_filtro: Optional[str] = None,
+    ) -> list[dict]:
         """Retorna el historial completo de los inmuebles de la operación y su historial de precios."""
         with self._connect() as conn:
-            inmuebles = [
-                dict(row)
-                for row in conn.execute(
-                    """
-                    SELECT * FROM inmuebles
-                    WHERE operacion = ?
-                    ORDER BY activo DESC, score DESC, fecha_ultima_deteccion DESC
-                    """,
-                    (operacion,),
-                ).fetchall()
-            ]
+            if categoria_filtro is not None:
+                inmuebles = [
+                    dict(row)
+                    for row in conn.execute(
+                        """
+                        SELECT * FROM inmuebles
+                        WHERE operacion = ? AND categoria_filtro = ?
+                        ORDER BY activo DESC, score DESC, fecha_ultima_deteccion DESC
+                        """,
+                        (operacion, categoria_filtro),
+                    ).fetchall()
+                ]
+            else:
+                inmuebles = [
+                    dict(row)
+                    for row in conn.execute(
+                        """
+                        SELECT * FROM inmuebles
+                        WHERE operacion = ?
+                        ORDER BY activo DESC, score DESC, fecha_ultima_deteccion DESC
+                        """,
+                        (operacion,),
+                    ).fetchall()
+                ]
             history_rows = conn.execute(
                 "SELECT * FROM price_history ORDER BY fecha ASC, id ASC"
             ).fetchall()
@@ -601,23 +653,39 @@ class DatabaseManager:
                 result[row["fingerprint"]] = clean_fotos(fotos)
         return result
 
-    def get_active_evaluated(self, operacion: str) -> list[EvaluatedListing]:
+    def get_active_evaluated(
+        self,
+        operacion: str,
+        categoria_filtro: Optional[str] = None,
+    ) -> list[EvaluatedListing]:
         """Reconstruye los inmuebles activos desde SQLite como EvaluatedListing."""
         today_str = date.today().isoformat()
         with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT * FROM inmuebles
-                WHERE operacion = ? AND activo = 1
-                ORDER BY score DESC, fecha_ultima_deteccion DESC
-                """,
-                (operacion,),
-            ).fetchall()
+            if categoria_filtro is not None:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM inmuebles
+                    WHERE operacion = ? AND activo = 1 AND categoria_filtro = ?
+                    ORDER BY score DESC, fecha_ultima_deteccion DESC
+                    """,
+                    (operacion, categoria_filtro),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM inmuebles
+                    WHERE operacion = ? AND activo = 1
+                    ORDER BY score DESC, fecha_ultima_deteccion DESC
+                    """,
+                    (operacion,),
+                ).fetchall()
         items: list[EvaluatedListing] = []
         for row in rows:
             rec = dict(row)
+            cat = rec.get("categoria_filtro") or "exacto"
+            fotos_limit = ADJUSTMENT_MAX_FOTOS if cat == "ajuste_razonable" else None
             links = [tuple(x) for x in json.loads(rec.get("portales_enlaces_json") or "[]")]
-            fotos = clean_fotos(json.loads(rec.get("fotos_json") or "[]"))
+            fotos = clean_fotos(json.loads(rec.get("fotos_json") or "[]"), limit=fotos_limit)
             items.append(
                 EvaluatedListing(
                     fingerprint=rec["fingerprint"],
@@ -658,6 +726,8 @@ class DatabaseManager:
                         rec.get("fecha_primera_deteccion") or "", today_str
                     ),
                     etiquetas_confort=rec.get("etiquetas_confort") or "",
+                    categoria_filtro=cat,
+                    motivos_ajuste=rec.get("motivos_ajuste") or "",
                 )
             )
         return items

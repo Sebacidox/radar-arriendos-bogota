@@ -72,6 +72,31 @@ BARRIO_ALIASES: dict[str, str] = {
     "las villas": "las villas",
     "iberia": "iberia",
     "mazuren": "mazuren",
+    "el chico": "chico",
+    "chico norte ii": "chico norte",
+    "chico norte iii": "chico norte",
+    "chico norte": "chico norte",
+    "chico reservado": "chico reservado",
+    "chico navarra": "chico navarra",
+    "santa barbara central": "santa barbara central",
+    "santa barbara occidental": "santa barbara occidental",
+    "niza norte": "niza",
+    "niza sur": "niza",
+    "niza": "niza",
+    "los rosales": "los rosales",
+    "el refugio": "el refugio",
+    "floresta": "la floresta",
+    "la floresta": "la floresta",
+    "pontevedra": "pontevedra",
+    "pasadena": "pasadena",
+    "molinos norte": "molinos norte",
+    "san patricio": "san patricio",
+    "la carolina": "la carolina",
+    "country club": "country club",
+    "bella suiza": "bella suiza",
+    "santa bibiana": "santa bibiana",
+    "andes norte": "andes norte",
+    "rionegro": "rionegro",
 }
 
 # Reglas de filtrado estricto (Hard Filters)
@@ -81,9 +106,82 @@ MAX_HABITACIONES: int = 3
 MIN_BANOS: int = 2
 MIN_PARQUEADEROS: int = 1
 ALLOWED_ESTRATOS: frozenset[int] = frozenset({3, 4, 5})
-MAX_COSTO_TOTAL: int = 3_500_000
+TARGET_MAX_COSTO_TOTAL: int = 3_500_000
+MAX_COSTO_TOTAL: int = 3_800_000
 MAX_PRECIO_VENTA: int = 800_000_000
 ADMIN_ESTIMADA_POR_M2: int = 5_500
+RENT_OVER_TARGET_BASE_PENALTY: float = 1.0
+RENT_OVER_TARGET_MAX_EXTRA_PENALTY: float = 2.0
+
+# Reglas de tolerancia para "Ajustes Razonables" (máximo 2 parámetros flexibles a la vez)
+ADJUSTMENT_MIN_AREA_M2: float = 65.0
+ADJUSTMENT_MAX_COSTO_TOTAL: int = 4_200_000
+ADJUSTMENT_MAX_PRECIO_VENTA: int = 850_000_000
+ADJUSTMENT_MAX_DISTANCE_KM: float = 9.0
+ADJUSTMENT_MAX_FAILED_PARAMS: int = 2
+ADJUSTMENT_MAX_FOTOS: int = 10
+
+FAMILY_LOCATIONS_COORDS: dict[str, tuple[float, float]] = {
+    "Gloria": (4.72495, -74.03345),
+    "Ángela": (4.700921, -74.053909),
+    "Beatriz": (4.666094, -74.075093),
+}
+
+ADJUSTMENT_BARRIO_WHITELIST_ZONA: dict[str, str] = {
+    "santa barbara central": "Oriental",
+    "santa barbara occidental": "Occidental",
+    "chico norte": "Oriental",
+    "chico": "Oriental",
+    "chico reservado": "Oriental",
+    "chico navarra": "Occidental",
+    "los rosales": "Oriental",
+    "el refugio": "Oriental",
+    "cabrera": "Oriental",
+    "usaquen": "Oriental",
+    "pasadena": "Occidental",
+    "niza": "Occidental",
+    "la floresta": "Occidental",
+    "pontevedra": "Occidental",
+    "la carolina": "Oriental",
+    "country club": "Oriental",
+    "san patricio": "Oriental",
+    "molinos norte": "Oriental",
+    "navarra": "Occidental",
+    "bella suiza": "Oriental",
+    "santa bibiana": "Oriental",
+    "andes norte": "Occidental",
+    "rionegro": "Occidental",
+    "gratamira": "Occidental",
+    "sotileza": "Occidental",
+}
+
+ADJUSTMENT_BARRIO_CENTROIDS: dict[str, tuple[float, float]] = {
+    "santa barbara central": (4.6960, -74.0410),
+    "santa barbara occidental": (4.6980, -74.0490),
+    "chico norte": (4.6775, -74.0485),
+    "chico": (4.6745, -74.0495),
+    "chico reservado": (4.6730, -74.0435),
+    "chico navarra": (4.6915, -74.0530),
+    "los rosales": (4.6580, -74.0520),
+    "el refugio": (4.6650, -74.0510),
+    "cabrera": (4.6680, -74.0495),
+    "usaquen": (4.6950, -74.0305),
+    "pasadena": (4.6960, -74.0610),
+    "niza": (4.7070, -74.0695),
+    "la floresta": (4.6930, -74.0740),
+    "pontevedra": (4.6985, -74.0735),
+    "la carolina": (4.7035, -74.0335),
+    "country club": (4.7125, -74.0365),
+    "san patricio": (4.6895, -74.0470),
+    "molinos norte": (4.6930, -74.0460),
+    "navarra": (4.6920, -74.0535),
+    "bella suiza": (4.7045, -74.0310),
+    "santa bibiana": (4.6925, -74.0430),
+    "andes norte": (4.6890, -74.0645),
+    "rionegro": (4.6860, -74.0675),
+    "gratamira": (4.7320, -74.0745),
+    "sotileza": (4.7250, -74.0760),
+}
 
 # Palabras clave de preferencias y requisito de ascensor
 ASCENSOR_KEYWORDS: tuple[str, ...] = (
@@ -124,6 +222,10 @@ SHEET_RESUMEN_BARRIOS = "Resumen_Barrios"
 SHEET_TOP_VENTAS = "Top semana ventas"
 SHEET_HISTORICO_VENTAS = "Histórico ventas"
 SHEET_RESUMEN_BARRIOS_VENTAS = "Resumen_Barrios_Ventas"
+SHEET_AJUSTES_ARRIENDOS = "Ajustes_Arriendos"
+SHEET_AJUSTES_VENTAS = "Ajustes_Ventas"
+SHEET_RESUMEN_AJUSTES_ARRIENDOS = "Resumen_Ajustes_Arriendos"
+SHEET_RESUMEN_AJUSTES_VENTAS = "Resumen_Ajustes_Ventas"
 
 TOP_SEMANA_HEADERS: list[str] = [
     "Fingerprint",
@@ -189,6 +291,15 @@ TOP_VENTAS_HEADERS: list[str] = [
     "Notas_Personales",
     "Checklist_Visita",
 ]
+
+
+def _with_motivos_header(base_headers: list[str]) -> list[str]:
+    idx = base_headers.index("Fotos")
+    return [*base_headers[:idx], "Motivos_Ajuste", *base_headers[idx:]]
+
+
+AJUSTES_ARRIENDOS_HEADERS: list[str] = _with_motivos_header(TOP_SEMANA_HEADERS)
+AJUSTES_VENTAS_HEADERS: list[str] = _with_motivos_header(TOP_VENTAS_HEADERS)
 
 USER_AGENTS: list[str] = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",

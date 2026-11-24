@@ -13,10 +13,14 @@
 var SHEET_NAMES = {
   ARRIENDOS: "Top_Semana",
   VENTAS: "Top semana ventas",
+  AJUSTES_ARRIENDOS: "Ajustes_Arriendos",
+  AJUSTES_VENTAS: "Ajustes_Ventas",
   HISTORICO_ARRIENDOS: "Historico_Completo",
   HISTORICO_VENTAS: "Histórico ventas",
   RESUMEN_ARRIENDOS: "Resumen_Barrios",
   RESUMEN_VENTAS: "Resumen_Barrios_Ventas",
+  RESUMEN_AJUSTES_ARRIENDOS: "Resumen_Ajustes_Arriendos",
+  RESUMEN_AJUSTES_VENTAS: "Resumen_Ajustes_Ventas",
   MEJORAS: "Mejoras",
   MIS_AVISOS: "Mis_Avisos",
 };
@@ -65,22 +69,34 @@ function doGet(e) {
 
     var arriendos = readSheetAsObjects_(ss, SHEET_NAMES.ARRIENDOS, tz);
     var ventas = readSheetAsObjects_(ss, SHEET_NAMES.VENTAS, tz);
+    var ajustesArriendos = readSheetAsObjects_(ss, SHEET_NAMES.AJUSTES_ARRIENDOS, tz);
+    var ajustesVentas = readSheetAsObjects_(ss, SHEET_NAMES.AJUSTES_VENTAS, tz);
     var historicoCompleto = readSheetAsObjects_(ss, SHEET_NAMES.HISTORICO_ARRIENDOS, tz);
     var historicoVentas = readSheetAsObjects_(ss, SHEET_NAMES.HISTORICO_VENTAS, tz);
     var resumenBarrios = readSheetAsObjects_(ss, SHEET_NAMES.RESUMEN_ARRIENDOS, tz);
     var resumenBarriosVentas = readSheetAsObjects_(ss, SHEET_NAMES.RESUMEN_VENTAS, tz);
+    var resumenAjustesArriendos = readSheetAsObjects_(ss, SHEET_NAMES.RESUMEN_AJUSTES_ARRIENDOS, tz);
+    var resumenAjustesVentas = readSheetAsObjects_(ss, SHEET_NAMES.RESUMEN_AJUSTES_VENTAS, tz);
     var mejoras = readSheetAsObjects_(ss, SHEET_NAMES.MEJORAS, tz);
     var misAvisos = readSheetAsObjects_(ss, SHEET_NAMES.MIS_AVISOS, tz);
 
-    var lastUpdated = resolveLastUpdated_(arriendos, ventas, tz);
+    var lastUpdated = resolveLastUpdated_(
+      arriendos.concat(ajustesArriendos),
+      ventas.concat(ajustesVentas),
+      tz
+    );
 
     var sheetsMap = {};
     sheetsMap[SHEET_NAMES.ARRIENDOS] = arriendos;
     sheetsMap[SHEET_NAMES.VENTAS] = ventas;
+    sheetsMap[SHEET_NAMES.AJUSTES_ARRIENDOS] = ajustesArriendos;
+    sheetsMap[SHEET_NAMES.AJUSTES_VENTAS] = ajustesVentas;
     sheetsMap[SHEET_NAMES.HISTORICO_ARRIENDOS] = historicoCompleto;
     sheetsMap[SHEET_NAMES.HISTORICO_VENTAS] = historicoVentas;
     sheetsMap[SHEET_NAMES.RESUMEN_ARRIENDOS] = resumenBarrios;
     sheetsMap[SHEET_NAMES.RESUMEN_VENTAS] = resumenBarriosVentas;
+    sheetsMap[SHEET_NAMES.RESUMEN_AJUSTES_ARRIENDOS] = resumenAjustesArriendos;
+    sheetsMap[SHEET_NAMES.RESUMEN_AJUSTES_VENTAS] = resumenAjustesVentas;
     sheetsMap[SHEET_NAMES.MEJORAS] = mejoras;
     sheetsMap[SHEET_NAMES.MIS_AVISOS] = misAvisos;
 
@@ -90,10 +106,14 @@ function doGet(e) {
       sheetNames: SHEET_NAMES,
       arriendos: arriendos,
       ventas: ventas,
+      ajustesArriendos: ajustesArriendos,
+      ajustesVentas: ajustesVentas,
       historicoCompleto: historicoCompleto,
       historicoVentas: historicoVentas,
       resumenBarrios: resumenBarrios,
       resumenBarriosVentas: resumenBarriosVentas,
+      resumenAjustesArriendos: resumenAjustesArriendos,
+      resumenAjustesVentas: resumenAjustesVentas,
       mejoras: mejoras,
       misAvisos: misAvisos,
       sheets: sheetsMap,
@@ -531,6 +551,12 @@ function resolveSheetName_(name) {
   if (lower === "ventas" || lower === "top semana ventas") {
     return SHEET_NAMES.VENTAS;
   }
+  if (lower === "ajustes_arriendos" || lower === "ajustesarriendos") {
+    return SHEET_NAMES.AJUSTES_ARRIENDOS;
+  }
+  if (lower === "ajustes_ventas" || lower === "ajustesventas") {
+    return SHEET_NAMES.AJUSTES_VENTAS;
+  }
   if (lower === "historico_completo") {
     return SHEET_NAMES.HISTORICO_ARRIENDOS;
   }
@@ -542,6 +568,12 @@ function resolveSheetName_(name) {
   }
   if (lower === "resumen_barrios_ventas") {
     return SHEET_NAMES.RESUMEN_VENTAS;
+  }
+  if (lower === "resumen_ajustes_arriendos") {
+    return SHEET_NAMES.RESUMEN_AJUSTES_ARRIENDOS;
+  }
+  if (lower === "resumen_ajustes_ventas") {
+    return SHEET_NAMES.RESUMEN_AJUSTES_VENTAS;
   }
   if (lower === "mejoras") {
     return SHEET_NAMES.MEJORAS;

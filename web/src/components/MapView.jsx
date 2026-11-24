@@ -16,13 +16,18 @@ const AUTO_NORTE_LINE = [
   [4.7365, -74.0485],
 ];
 
-function createScorePin(score, operacion) {
+function createScorePin(score, operacion, isAjuste = false) {
   const s = Number(score) || 0;
   let bg = '#57534E';
   if (s >= 8.5) bg = '#2E5E4E';
   else if (s >= 6.5) bg = '#B45309';
 
-  const outerRing = operacion === 'venta' ? 'rgba(255,255,255,0.92)' : 'rgba(254,243,199,0.95)';
+  const borderStyle = isAjuste ? '2.5px dashed #FFFFFF' : '2.5px solid #FFFFFF';
+  const outerRing = isAjuste
+    ? 'rgba(217, 119, 6, 0.92)'
+    : operacion === 'venta'
+      ? 'rgba(255,255,255,0.92)'
+      : 'rgba(254,243,199,0.95)';
   const html = `
     <div style="
       width: 36px;
@@ -30,7 +35,7 @@ function createScorePin(score, operacion) {
       border-radius: 9999px;
       background: ${bg};
       color: #ffffff;
-      border: 2.5px solid #FFFFFF;
+      border: ${borderStyle};
       box-shadow: 0 0 0 2px ${outerRing}, 0 4px 12px rgba(28,25,23,0.28);
       display: flex;
       align-items: center;
@@ -84,40 +89,68 @@ function createFamilyPin(name) {
   });
 }
 
-export default function MapView({ arriendos, ventas }) {
+export default function MapView({
+  arriendos,
+  ventas,
+  ajustesArriendos = [],
+  ajustesVentas = [],
+}) {
   const [mode, setMode] = useState('todos');
+  const [ajustesFilter, setAjustesFilter] = useState('exactos');
 
-  const activeArriendos = useMemo(
-    () =>
-      arriendos.filter(
-        (item) => item.estadoVisita !== 'Descartado' && !isListingUnavailable(item)
-      ),
-    [arriendos]
-  );
-
-  const activeVentas = useMemo(
-    () =>
-      ventas.filter(
-        (item) => item.estadoVisita !== 'Descartado' && !isListingUnavailable(item)
-      ),
-    [ventas]
-  );
-
-  const markers = useMemo(() => {
-    const pool =
-      mode === 'arriendos'
-        ? activeArriendos
-        : mode === 'ventas'
-          ? activeVentas
-          : [...activeArriendos, ...activeVentas];
-    return pool.filter(
-      (item) =>
-        item.lat !== null &&
-        item.lng !== null &&
-        Number.isFinite(item.lat) &&
-        Number.isFinite(item.lng)
+  const filterActive = (arr) =>
+    (arr || []).filter(
+      (item) => item.estadoVisita !== 'Descartado' && !isListingUnavailable(item)
     );
-  }, [activeArriendos, activeVentas, mode]);
+
+  const activeArriendos = useMemo(() => filterActive(arriendos), [arriendos]);
+  const activeVentas = useMemo(() => filterActive(ventas), [ventas]);
+  const activeAdjArriendos = useMemo(
+    () => filterActive(ajustesArriendos),
+    [ajustesArriendos]
+  );
+  const activeAdjVentas = useMemo(
+    () => filterActive(ajustesVentas),
+    [ajustesVentas]
+  );
+
+  const totalExactos = activeArriendos.length + activeVentas.length;
+  const totalAjustes = activeAdjArriendos.length + activeAdjVentas.length;
+
+  const { countTodos, countArriendos, countVentas, markers } = useMemo(() => {
+    const pickOpPool = (exactList, adjList) => {
+      if (ajustesFilter === 'solo_ajustes') return adjList;
+      if (ajustesFilter === 'incluir') return [...exactList, ...adjList];
+      return exactList;
+    };
+
+    const arrPool = pickOpPool(activeArriendos, activeAdjArriendos);
+    const vtaPool = pickOpPool(activeVentas, activeAdjVentas);
+    const allPool = [...arrPool, ...vtaPool];
+
+    const selected =
+      mode === 'arriendos' ? arrPool : mode === 'ventas' ? vtaPool : allPool;
+
+    return {
+      countTodos: allPool.length,
+      countArriendos: arrPool.length,
+      countVentas: vtaPool.length,
+      markers: selected.filter(
+        (item) =>
+          item.lat !== null &&
+          item.lng !== null &&
+          Number.isFinite(item.lat) &&
+          Number.isFinite(item.lng)
+      ),
+    };
+  }, [
+    activeArriendos,
+    activeVentas,
+    activeAdjArriendos,
+    activeAdjVentas,
+    mode,
+    ajustesFilter,
+  ]);
 
   const definedFamily = useMemo(
     () => FAMILY_LOCATIONS.filter((loc) => loc.defined),
@@ -141,28 +174,50 @@ export default function MapView({ arriendos, ventas }) {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            {
-              id: 'todos',
-              label: `Todos (${activeArriendos.length + activeVentas.length})`,
-            },
-            { id: 'arriendos', label: `Arriendos (${activeArriendos.length})` },
-            { id: 'ventas', label: `Ventas (${activeVentas.length})` },
-          ].map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => setMode(opt.id)}
-              className={`min-h-[42px] rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                mode === opt.id
-                  ? 'bg-sage text-white shadow-sm'
-                  : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { id: 'todos', label: `Todos (${countTodos})` },
+              { id: 'arriendos', label: `Arriendos (${countArriendos})` },
+              { id: 'ventas', label: `Ventas (${countVentas})` },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setMode(opt.id)}
+                className={`min-h-[42px] rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                  mode === opt.id
+                    ? 'bg-sage text-white shadow-sm'
+                    : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-amber-200/80 bg-amber-50/70 p-1">
+            {[
+              { id: 'exactos', label: `Solo exactos (${totalExactos})` },
+              { id: 'incluir', label: `+ Ajustes razonables (${totalAjustes})` },
+              { id: 'solo_ajustes', label: `Solo ajustes (${totalAjustes})` },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setAjustesFilter(opt.id)}
+                className={`min-h-[36px] rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                  ajustesFilter === opt.id
+                    ? opt.id === 'exactos'
+                      ? 'bg-ink text-white shadow-sm'
+                      : 'bg-amberWarm text-white shadow-sm'
+                    : 'text-stone-700 hover:bg-white/80 hover:text-ink'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -204,6 +259,9 @@ export default function MapView({ arriendos, ventas }) {
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-full bg-purple-700 ring-2 ring-white shadow-sm" /> Puntos familiares (Gloria / Ángela / Beatriz)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full border-2 border-dashed border-white bg-sage ring-2 ring-amber-600 shadow-sm" /> Borde punteado ámbar: Ajuste razonable
         </span>
       </div>
 
@@ -265,6 +323,7 @@ export default function MapView({ arriendos, ventas }) {
 
           {markers.map((item) => {
             const sv = buildStreetViewUrl(item.lat, item.lng);
+            const isAjuste = item.categoriaFiltro === 'ajuste_razonable';
             const distances = definedFamily
               .map((fam) => {
                 const km = haversineKm(item.lat, item.lng, fam.lat, fam.lng);
@@ -274,9 +333,9 @@ export default function MapView({ arriendos, ventas }) {
 
             return (
               <Marker
-                key={item.id}
+                key={`${item.categoriaFiltro || 'exacto'}-${item.id}`}
                 position={[item.lat, item.lng]}
-                icon={createScorePin(item.score, item.operacion)}
+                icon={createScorePin(item.score, item.operacion, isAjuste)}
               >
                 <Popup maxWidth={280}>
                   <div className="space-y-2 p-0.5 text-xs text-ink">
@@ -287,14 +346,26 @@ export default function MapView({ arriendos, ventas }) {
                         className="h-28 w-full rounded-lg object-cover"
                       />
                     )}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="rounded bg-sage/10 px-2 py-0.5 font-bold text-sage">
-                        {item.operacion === 'venta' ? 'Venta' : 'Arriendo'}
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="rounded bg-sage/10 px-2 py-0.5 font-bold text-sage">
+                          {item.operacion === 'venta' ? 'Venta' : 'Arriendo'}
+                        </span>
+                        {isAjuste && (
+                          <span className="rounded bg-amber-100 px-2 py-0.5 font-bold text-amberWarm">
+                            Ajuste razonable
+                          </span>
+                        )}
+                      </div>
                       <span className="font-bold text-ink">
                         Puntuación {Number(item.score).toFixed(1)}
                       </span>
                     </div>
+                    {isAjuste && item.motivosAjuste?.length > 0 && (
+                      <p className="rounded bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amberWarm">
+                        {item.motivosAjuste.join(' · ')}
+                      </p>
+                    )}
                     <div>
                       <p className="font-serif text-sm font-bold text-ink">
                         {formatTitleCase(item.barrio)}

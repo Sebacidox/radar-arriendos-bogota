@@ -9,6 +9,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
+from config import ADJUSTMENT_MAX_FOTOS
 from filters import clean_fotos
 from models import EvaluatedListing
 from scrapers.base import build_session, fetch_text, random_delay
@@ -253,9 +254,14 @@ def _enrich_single_listing(
     cached_fotos: list[str],
 ) -> tuple[bool, list[str]]:
     """Obtiene la galería completa de un inmueble desde sus enlaces si hace falta."""
-    current = clean_fotos(item.fotos)
+    max_fotos: Optional[int] = (
+        ADJUSTMENT_MAX_FOTOS if item.categoria_filtro == "ajuste_razonable" else None
+    )
+    current = clean_fotos(item.fotos, limit=max_fotos)
+    if max_fotos is not None and len(current) >= max_fotos:
+        return False, current
     if len(cached_fotos) > 5 and len(current) <= len(cached_fotos):
-        return False, clean_fotos(cached_fotos)
+        return False, clean_fotos(cached_fotos, limit=max_fotos)
 
     session = build_session()
     best_gallery = current
@@ -273,13 +279,13 @@ def _enrich_single_listing(
             len(detail_fotos) > len(best_gallery)
             or (len(detail_fotos) == len(best_gallery) and detail_fotos != best_gallery)
         ):
-            best_gallery = detail_fotos
+            best_gallery = clean_fotos(detail_fotos, limit=max_fotos)
             updated = True
 
     if len(cached_fotos) > len(best_gallery):
-        best_gallery = clean_fotos(cached_fotos)
+        best_gallery = clean_fotos(cached_fotos, limit=max_fotos)
 
-    return updated, best_gallery
+    return updated, clean_fotos(best_gallery, limit=max_fotos)
 
 
 def enrich_listings_galleries(

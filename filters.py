@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from typing import Optional
 
 from config import (
+    ADJUSTMENT_BARRIO_CENTROIDS,
+    ADJUSTMENT_BARRIO_WHITELIST_ZONA,
+    ADJUSTMENT_MAX_COSTO_TOTAL,
+    ADJUSTMENT_MAX_DISTANCE_KM,
+    ADJUSTMENT_MAX_FAILED_PARAMS,
+    ADJUSTMENT_MAX_FOTOS,
+    ADJUSTMENT_MAX_PRECIO_VENTA,
+    ADJUSTMENT_MIN_AREA_M2,
     ADMIN_ESTIMADA_POR_M2,
     ALLOWED_ESTRATOS,
     ASCENSOR_KEYWORDS,
@@ -14,6 +23,7 @@ from config import (
     BARRIO_ALIASES,
     BARRIO_CENTROIDS,
     BARRIO_WHITELIST_ZONA,
+    FAMILY_LOCATIONS_COORDS,
     LAT_MAX,
     LAT_MIN,
     LON_MAX,
@@ -65,6 +75,25 @@ def normalize_barrio(barrio: str) -> str:
     return norm or "desconocido"
 
 
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calcula distancia en kilómetros (Haversine) entre dos coordenadas."""
+    radius_km = 6371.0
+    p1 = math.radians(lat1)
+    p2 = math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2.0 * radius_km * math.asin(math.sqrt(a))
+
+
+def max_distance_to_family_km(lat: float, lon: float) -> float:
+    """Retorna la distancia máxima en km hacia Gloria, Ángela y Beatriz."""
+    return max(
+        haversine_km(lat, lon, f_lat, f_lon)
+        for f_lat, f_lon in FAMILY_LOCATIONS_COORDS.values()
+    )
+
+
 def is_in_geo_polygon(lat: Optional[float], lon: Optional[float]) -> bool:
     """Valida si las coordenadas están dentro del cuadrante norte de Bogotá."""
     if lat is None or lon is None:
@@ -73,23 +102,66 @@ def is_in_geo_polygon(lat: Optional[float], lon: Optional[float]) -> bool:
 
 
 def is_in_barrio_whitelist(barrio_raw: str) -> tuple[bool, str]:
-    """Valida el barrio contra la lista blanca cuando no existen coordenadas."""
+    """Valida el barrio contra la lista blanca estricta cuando no existen coordenadas."""
     canon = normalize_barrio(barrio_raw)
     if canon in BARRIO_WHITELIST_ZONA:
         return True, canon
 
     norm = normalize_text(barrio_raw)
-    if "santa barbara" in norm and "alta" not in norm:
+    if "santa barbara" in norm and not any(
+        w in norm for w in ("alta", "central", "occidental")
+    ):
         return True, "santa barbara norte"
 
     return False, canon
+
+
+def is_in_adjustment_barrio_whitelist(barrio_raw: str) -> tuple[bool, str]:
+    """Valida el barrio contra la lista blanca ampliada (<= 9 km de las 3 locaciones)."""
+    canon = normalize_barrio(barrio_raw)
+    if canon in ADJUSTMENT_BARRIO_WHITELIST_ZONA:
+        return True, canon
+
+    norm = normalize_text(barrio_raw)
+    if "chico" in norm and "navarra" not in norm:
+        return True, "chico"
+    if "santa barbara" in norm and "alta" not in norm:
+        return True, "santa barbara central"
+
+    return False, canon
+
+
+def _classify_location(raw: RawListing) -> tuple[bool, bool, str, Optional[float]]:
+    """Clasifica ubicación en (permitida, es_ajuste_zona, barrio_canon, max_dist_km)."""
+    barrio_canon = normalize_barrio(raw.barrio)
+    if raw.latitud is not None and raw.longitud is not None:
+        if is_in_geo_polygon(raw.latitud, raw.longitud):
+            return True, False, barrio_canon, None
+        max_dist = max_distance_to_family_km(raw.latitud, raw.longitud)
+        if max_dist <= ADJUSTMENT_MAX_DISTANCE_KM:
+            return True, True, barrio_canon, max_dist
+        return False, False, barrio_canon, max_dist
+
+    in_strict, canon_strict = is_in_barrio_whitelist(raw.barrio)
+    if in_strict:
+        return True, False, canon_strict, None
+
+    in_adj, canon_adj = is_in_adjustment_barrio_whitelist(raw.barrio)
+    if in_adj:
+        return True, True, canon_adj, None
+
+    return False, False, barrio_canon, None
 
 
 def determine_zona(lon: Optional[float], barrio_canon: str) -> str:
     """Determina si el inmueble está en Zona Oriental u Occidental."""
     if lon is not None:
         return "Oriental" if lon >= LON_ZONE_SPLIT else "Occidental"
-    return BARRIO_WHITELIST_ZONA.get(barrio_canon, "Occidental")
+    return (
+        BARRIO_WHITELIST_ZONA.get(barrio_canon)
+        or ADJUSTMENT_BARRIO_WHITELIST_ZONA.get(barrio_canon)
+        or "Occidental"
+    )
 
 
 def _build_searchable_text(titulo: str, descripcion: str, features: list[str]) -> str:
@@ -102,6 +174,10 @@ NEGATIVE_ELEVATOR_PHRASES: tuple[str, ...] = (
     "no tiene ascensor",
     "no cuenta con ascensor",
     "no posee ascensor",
+    "sin elevador",
+    "no tiene elevador",
+    "no cuenta con elevador",
+    "no posee elevador",
 )
 
 
@@ -123,6 +199,77 @@ def detect_elevator(titulo: str, descripcion: str, features: list[str]) -> bool:
         re.search(rf"\b{re.escape(normalize_text(kw))}\b", text)
         for kw in ASCENSOR_KEYWORDS
     )
+
+
+NEGATIVE_ADMIN_INCLUDED_PHRASES: tuple[str, ...] = (
+    "no incluye administracion",
+    "no esta incluida la administracion",
+    "administracion no incluida",
+    "admin no incluida",
+    "sin administracion",
+    "mas administracion",
+    "+ administracion",
+    "aparte administracion",
+    "adicional administracion",
+)
+
+POSITIVE_ADMIN_INCLUDED_PHRASES: tuple[str, ...] = (
+    "administracion incluida",
+    "admin incluida",
+    "admon incluida",
+    "incluye administracion",
+    "incluye la administracion",
+    "incluye admon",
+    "con administracion incluida",
+    "canon incluye administracion",
+    "valor incluye administracion",
+)
+
+
+def detect_admin_included(titulo: str, descripcion: str, features: list[str]) -> bool:
+    """Detecta si el texto indica explícitamente que la administración está incluida."""
+    text = _build_searchable_text(titulo, descripcion, features)
+    if not text or any(neg in text for neg in NEGATIVE_ADMIN_INCLUDED_PHRASES):
+        return False
+    return any(pos in text for pos in POSITIVE_ADMIN_INCLUDED_PHRASES)
+
+
+def passes_pre_detail_checks(raw: RawListing) -> bool:
+    """Valida los 5 innegociables y topes extendidos antes de consultar ficha individual."""
+    if raw.area is None or raw.area < ADJUSTMENT_MIN_AREA_M2:
+        return False
+    if raw.habitaciones is None or not (MIN_HABITACIONES <= raw.habitaciones <= MAX_HABITACIONES):
+        return False
+    if raw.banos is None or raw.banos < MIN_BANOS:
+        return False
+    if raw.parqueaderos is None or raw.parqueaderos < MIN_PARQUEADEROS:
+        return False
+    if raw.estrato is None or raw.estrato not in ALLOWED_ESTRATOS:
+        return False
+
+    failed = 0
+    if raw.area < MIN_AREA_M2:
+        failed += 1
+
+    loc_ok, loc_adj, _, _ = _classify_location(raw)
+    if not loc_ok:
+        return False
+    if loc_adj:
+        failed += 1
+
+    operacion = (raw.operacion or "arriendo").lower()
+    if operacion == "venta":
+        if raw.precio_venta is None or raw.precio_venta <= 0 or raw.precio_venta > ADJUSTMENT_MAX_PRECIO_VENTA:
+            return False
+        if raw.precio_venta > MAX_PRECIO_VENTA:
+            failed += 1
+    else:
+        if raw.canon is None or raw.canon <= 0 or raw.canon > ADJUSTMENT_MAX_COSTO_TOTAL:
+            return False
+        if raw.canon > MAX_COSTO_TOTAL:
+            failed += 1
+
+    return failed <= ADJUSTMENT_MAX_FAILED_PARAMS
 
 
 def detect_open_kitchen(titulo: str, descripcion: str, features: list[str]) -> bool:
@@ -148,6 +295,8 @@ def resolve_coordinates(
         return round(float(lat), 6), round(float(lon), 6)
     if barrio_canon in BARRIO_CENTROIDS:
         return BARRIO_CENTROIDS[barrio_canon]
+    if barrio_canon in ADJUSTMENT_BARRIO_CENTROIDS:
+        return ADJUSTMENT_BARRIO_CENTROIDS[barrio_canon]
     if zona == "Oriental":
         return QUADRANT_DEFAULT_CENTROID_ORIENTAL
     return QUADRANT_DEFAULT_CENTROID_OCCIDENTAL
@@ -326,9 +475,9 @@ def build_fingerprint(
 
 
 def evaluate_listing(raw: RawListing) -> Optional[EvaluatedListing]:
-    """Aplica los filtros estrictos; retorna EvaluatedListing si pasa todos, o None si se descarta."""
-    # 1. Validar atributos físicos, estrato y ascensor obligatorio
-    if raw.area is None or raw.area <= MIN_AREA_M2:
+    """Clasifica el inmueble en exacto, ajuste_razonable (<=2 ajustes) o None si se descarta."""
+    # 1. Validar los 5 requisitos innegociables + piso mínimo de área extendido
+    if raw.area is None or raw.area < ADJUSTMENT_MIN_AREA_M2:
         return None
     if raw.habitaciones is None or not (MIN_HABITACIONES <= raw.habitaciones <= MAX_HABITACIONES):
         return None
@@ -341,15 +490,24 @@ def evaluate_listing(raw: RawListing) -> Optional[EvaluatedListing]:
     if not detect_elevator(raw.titulo, raw.descripcion, raw.features_extra):
         return None
 
-    # 2. Validar polígono geográfico o lista blanca de barrios si faltan coordenadas
-    barrio_canon = normalize_barrio(raw.barrio)
-    if raw.latitud is not None and raw.longitud is not None:
-        if not is_in_geo_polygon(raw.latitud, raw.longitud):
-            return None
-    else:
-        in_whitelist, barrio_canon = is_in_barrio_whitelist(raw.barrio)
-        if not in_whitelist:
-            return None
+    motivos: list[str] = []
+
+    if raw.area < MIN_AREA_M2:
+        diff_m2 = round(MIN_AREA_M2 - float(raw.area), 1)
+        diff_str = f"{int(diff_m2)}" if diff_m2.is_integer() else f"{diff_m2:.1f}"
+        area_val = float(raw.area)
+        area_str = f"{int(area_val)}" if area_val.is_integer() else f"{area_val:.1f}"
+        motivos.append(f"Área {area_str} m² (-{diff_str} m²)")
+
+    # 2. Validar polígono estricto o regla ampliada (<= 9 km de Gloria, Ángela y Beatriz)
+    loc_ok, loc_adj, barrio_canon, max_dist_km = _classify_location(raw)
+    if not loc_ok:
+        return None
+    if loc_adj:
+        if max_dist_km is not None:
+            motivos.append(f"Zona ampliada (máx. {max_dist_km:.1f} km familia)")
+        else:
+            motivos.append("Zona ampliada (≤ 9 km familia)")
 
     # 3. Validar presupuesto según operación (arriendo o venta)
     operacion = (raw.operacion or "arriendo").lower()
@@ -357,8 +515,16 @@ def evaluate_listing(raw: RawListing) -> Optional[EvaluatedListing]:
     admin_estimada_flag = False
 
     if operacion == "venta":
-        if raw.precio_venta is None or raw.precio_venta <= 0 or raw.precio_venta > MAX_PRECIO_VENTA:
+        if (
+            raw.precio_venta is None
+            or raw.precio_venta <= 0
+            or raw.precio_venta > ADJUSTMENT_MAX_PRECIO_VENTA
+        ):
             return None
+        if raw.precio_venta > MAX_PRECIO_VENTA:
+            diff_m = (raw.precio_venta - MAX_PRECIO_VENTA) / 1_000_000
+            diff_m_str = f"{int(diff_m)}" if diff_m.is_integer() else f"{diff_m:.1f}"
+            motivos.append(f"Venta +${diff_m_str}M sobre $800M")
         if administracion == 0 and raw.es_edificio_o_conjunto:
             administracion = int(round(raw.area * ADMIN_ESTIMADA_POR_M2))
             admin_estimada_flag = True
@@ -368,14 +534,28 @@ def evaluate_listing(raw: RawListing) -> Optional[EvaluatedListing]:
     else:
         if raw.canon is None or raw.canon <= 0:
             return None
-        if administracion == 0 and not raw.admin_incluida and raw.es_edificio_o_conjunto:
+        admin_incluida = raw.admin_incluida or (
+            administracion == 0
+            and detect_admin_included(raw.titulo, raw.descripcion, raw.features_extra)
+        )
+        if administracion == 0 and not admin_incluida and raw.es_edificio_o_conjunto:
             administracion = int(round(raw.area * ADMIN_ESTIMADA_POR_M2))
             admin_estimada_flag = True
         canon = int(raw.canon)
         precio_venta = 0
         costo_total = int(canon + administracion)
-        if costo_total > MAX_COSTO_TOTAL:
+        if costo_total > ADJUSTMENT_MAX_COSTO_TOTAL:
             return None
+        if costo_total > MAX_COSTO_TOTAL:
+            diff_k = int(round((costo_total - MAX_COSTO_TOTAL) / 1000))
+            motivos.append(f"Arriendo +${diff_k:,} mil sobre $3.8M".replace(",", "."))
+
+    if len(motivos) > ADJUSTMENT_MAX_FAILED_PARAMS:
+        return None
+
+    categoria_filtro = "ajuste_razonable" if motivos else "exacto"
+    motivos_ajuste = " | ".join(motivos)
+    fotos_limit = ADJUSTMENT_MAX_FOTOS if categoria_filtro == "ajuste_razonable" else None
 
     # 4. Atributos derivados y puntuación
     zona = determine_zona(raw.longitud, barrio_canon)
@@ -385,7 +565,7 @@ def evaluate_listing(raw: RawListing) -> Optional[EvaluatedListing]:
     cocina_abierta = detect_open_kitchen(raw.titulo, raw.descripcion, raw.features_extra)
     balcon = detect_balcony(raw.titulo, raw.descripcion, raw.features_extra)
     costo_m2 = round(costo_total / raw.area, 2)
-    fotos_limpias = clean_fotos(raw.fotos)
+    fotos_limpias = clean_fotos(raw.fotos, limit=fotos_limit)
     antiguedad = detect_antiquity(raw.antiguedad, raw.titulo, raw.descripcion)
     etiquetas_confort = detect_comfort_tags(raw, has_elevator=True)
 
@@ -444,4 +624,6 @@ def evaluate_listing(raw: RawListing) -> Optional[EvaluatedListing]:
         antiguedad=antiguedad,
         dias_en_mercado=0,
         etiquetas_confort=etiquetas_confort,
+        categoria_filtro=categoria_filtro,
+        motivos_ajuste=motivos_ajuste,
     )

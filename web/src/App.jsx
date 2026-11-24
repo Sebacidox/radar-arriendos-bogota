@@ -119,6 +119,12 @@ function enrichAndMergeData(raw) {
       ...manualVen,
       ...(raw.ventas || []).map((item) => enrichItem(item, histVenMap)),
     ],
+    ajustesArriendos: (raw.ajustesArriendos || []).map((item) =>
+      enrichItem(item, histArrMap)
+    ),
+    ajustesVentas: (raw.ajustesVentas || []).map((item) =>
+      enrichItem(item, histVenMap)
+    ),
   };
 }
 
@@ -142,8 +148,12 @@ export default function App() {
     lastUpdated: '',
     arriendos: [],
     ventas: [],
+    ajustesArriendos: [],
+    ajustesVentas: [],
     resumenBarrios: [],
     resumenBarriosVentas: [],
+    resumenAjustesArriendos: [],
+    resumenAjustesVentas: [],
     historicoCompleto: [],
     historicoVentas: [],
     mejoras: [],
@@ -162,8 +172,14 @@ export default function App() {
   });
 
   const [filtersByOp, setFiltersByOp] = useState({
-    arriendo: makeDefaultFilters(),
-    venta: makeDefaultFilters(),
+    arriendo_exactos: makeDefaultFilters(),
+    arriendo_ajustes: makeDefaultFilters(),
+    venta_exactos: makeDefaultFilters(),
+    venta_ajustes: makeDefaultFilters(),
+  });
+  const [sectionByOp, setSectionByOp] = useState({
+    arriendo: 'exactos',
+    venta: 'exactos',
   });
   const [showDiscarded, setShowDiscarded] = useState(false);
   const [showUnavailable, setShowUnavailable] = useState(false);
@@ -213,7 +229,14 @@ export default function App() {
       const mapFn = (item) => (item.id === targetId ? { ...item, ...patch } : item);
       const nextArriendos = prev.arriendos.map(mapFn);
       const nextVentas = prev.ventas.map(mapFn);
-      const updated = [...nextArriendos, ...nextVentas].find((x) => x.id === targetId);
+      const nextAjustesArr = (prev.ajustesArriendos || []).map(mapFn);
+      const nextAjustesVta = (prev.ajustesVentas || []).map(mapFn);
+      const updated = [
+        ...nextArriendos,
+        ...nextVentas,
+        ...nextAjustesArr,
+        ...nextAjustesVta,
+      ].find((x) => x.id === targetId);
       if (updated?.origen === 'manual') {
         const localAll = loadLocalManualListings();
         const exists = localAll.some(
@@ -230,6 +253,8 @@ export default function App() {
         ...prev,
         arriendos: nextArriendos,
         ventas: nextVentas,
+        ajustesArriendos: nextAjustesArr,
+        ajustesVentas: nextAjustesVta,
       };
     });
   }, []);
@@ -451,8 +476,13 @@ export default function App() {
   );
 
   const allListings = useMemo(
-    () => [...data.arriendos, ...data.ventas],
-    [data.arriendos, data.ventas]
+    () => [
+      ...data.arriendos,
+      ...data.ventas,
+      ...(data.ajustesArriendos || []),
+      ...(data.ajustesVentas || []),
+    ],
+    [data.arriendos, data.ventas, data.ajustesArriendos, data.ajustesVentas]
   );
 
   const decisionListing = useMemo(
@@ -475,20 +505,55 @@ export default function App() {
   );
 
   const currentOp = activeTab === 'ventas' ? 'venta' : 'arriendo';
-  const currentFilters = filtersByOp[currentOp];
-  const setCurrentFilters = useCallback(
-    (nextFilters) => {
-      setFiltersByOp((prev) => ({ ...prev, [currentOp]: nextFilters }));
+  const currentSection = sectionByOp[currentOp] || 'exactos';
+  const isAjustesSection = currentSection === 'ajustes';
+  const filterKey = `${currentOp}_${currentSection}`;
+  const currentFilters = filtersByOp[filterKey] || makeDefaultFilters();
+
+  const setCurrentSection = useCallback(
+    (nextSection) => {
+      setSectionByOp((prev) => ({ ...prev, [currentOp]: nextSection }));
     },
     [currentOp]
   );
+  const setCurrentFilters = useCallback(
+    (nextFilters) => {
+      setFiltersByOp((prev) => ({ ...prev, [filterKey]: nextFilters }));
+    },
+    [filterKey]
+  );
   const resetCurrentFilters = useCallback(() => {
-    setFiltersByOp((prev) => ({ ...prev, [currentOp]: makeDefaultFilters() }));
-  }, [currentOp]);
+    setFiltersByOp((prev) => ({ ...prev, [filterKey]: makeDefaultFilters() }));
+  }, [filterKey]);
 
-  const currentList = activeTab === 'ventas' ? data.ventas : data.arriendos;
+  const exactosList = activeTab === 'ventas' ? data.ventas : data.arriendos;
+  const ajustesList =
+    activeTab === 'ventas' ? data.ajustesVentas || [] : data.ajustesArriendos || [];
+  const currentList = isAjustesSection ? ajustesList : exactosList;
+
   const currentResumen =
-    activeTab === 'ventas' ? data.resumenBarriosVentas : data.resumenBarrios;
+    activeTab === 'ventas'
+      ? isAjustesSection && (data.resumenAjustesVentas || []).length > 0
+        ? data.resumenAjustesVentas
+        : data.resumenBarriosVentas
+      : isAjustesSection && (data.resumenAjustesArriendos || []).length > 0
+        ? data.resumenAjustesArriendos
+        : data.resumenBarrios;
+
+  const exactosActiveCount = useMemo(
+    () =>
+      exactosList.filter(
+        (x) => x.estadoVisita !== 'Descartado' && !isListingUnavailable(x)
+      ).length,
+    [exactosList]
+  );
+  const ajustesActiveCount = useMemo(
+    () =>
+      ajustesList.filter(
+        (x) => x.estadoVisita !== 'Descartado' && !isListingUnavailable(x)
+      ).length,
+    [ajustesList]
+  );
 
   const { visibleListings, unavailableListings, discardedListings } = useMemo(() => {
     const q = currentFilters.search.trim().toLowerCase();
@@ -637,6 +702,42 @@ export default function App() {
           </div>
         ) : activeTab === 'arriendos' || activeTab === 'ventas' ? (
           <>
+            {/* Selector Opción A: Requisitos exactos vs Ajustes razonables */}
+            <div className="no-print mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="inline-flex w-full rounded-2xl border border-stone-200/80 bg-white p-1 shadow-[0_2px_10px_-4px_rgba(28,25,23,0.05)] sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setCurrentSection('exactos')}
+                  className={`flex-1 min-h-[42px] rounded-xl px-4 py-2 text-xs font-bold transition sm:flex-initial ${
+                    !isAjustesSection
+                      ? 'bg-sage text-white shadow-sm'
+                      : 'text-stone-700 hover:bg-ivory hover:text-ink'
+                  }`}
+                >
+                  Cumplen 100% ({exactosActiveCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentSection('ajustes')}
+                  className={`flex-1 min-h-[42px] rounded-xl px-4 py-2 text-xs font-bold transition sm:flex-initial ${
+                    isAjustesSection
+                      ? 'bg-amberWarm text-white shadow-sm'
+                      : 'text-stone-700 hover:bg-ivory hover:text-ink'
+                  }`}
+                >
+                  Ajustes razonables ({ajustesActiveCount})
+                </button>
+              </div>
+
+              {isAjustesSection && (
+                <p className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3.5 py-2 text-xs text-stone-700">
+                  Márgenes flexibles: <strong>65–69 m²</strong>, hasta{' '}
+                  <strong>{currentOp === 'venta' ? '$850M' : '$4.2M'}</strong> o hasta{' '}
+                  <strong>9 km</strong> de Gloria, Ángela y Beatriz (máx. 2 ajustes; siempre con ascensor, garaje, 2–3 hab, ≥2 baños y estrato 3–5).
+                </p>
+              )}
+            </div>
+
             <FilterBar
               filters={currentFilters}
               onChange={setCurrentFilters}
@@ -644,6 +745,7 @@ export default function App() {
               totalCount={currentList.filter((x) => !isListingUnavailable(x)).length}
               filteredCount={visibleListings.length}
               operacion={currentOp}
+              isAjustes={isAjustesSection}
               onOpenManualModal={() => setManualModalOpen(true)}
             />
 
@@ -754,13 +856,22 @@ export default function App() {
             onOpenDecision={(x) => setDecisionListingId(x.id)}
           />
         ) : activeTab === 'mapa' ? (
-          <MapView arriendos={data.arriendos} ventas={data.ventas} />
+          <MapView
+            arriendos={data.arriendos}
+            ventas={data.ventas}
+            ajustesArriendos={data.ajustesArriendos}
+            ajustesVentas={data.ajustesVentas}
+          />
         ) : activeTab === 'informes' ? (
           <ReportsView
             arriendos={data.arriendos}
             ventas={data.ventas}
+            ajustesArriendos={data.ajustesArriendos}
+            ajustesVentas={data.ajustesVentas}
             resumenBarrios={data.resumenBarrios}
             resumenBarriosVentas={data.resumenBarriosVentas}
+            resumenAjustesArriendos={data.resumenAjustesArriendos}
+            resumenAjustesVentas={data.resumenAjustesVentas}
             historicoCompleto={data.historicoCompleto}
             historicoVentas={data.historicoVentas}
             onSelectProperty={setSelectedProperty}
@@ -806,11 +917,13 @@ export default function App() {
           listing={decisionListing}
           resumenList={
             decisionListing.operacion === 'venta'
-              ? data.resumenBarriosVentas
-              : data.resumenBarrios
+              ? [...(data.resumenBarriosVentas || []), ...(data.resumenAjustesVentas || [])]
+              : [...(data.resumenBarrios || []), ...(data.resumenAjustesArriendos || [])]
           }
           allListings={
-            decisionListing.operacion === 'venta' ? data.ventas : data.arriendos
+            decisionListing.operacion === 'venta'
+              ? [...data.ventas, ...(data.ajustesVentas || [])]
+              : [...data.arriendos, ...(data.ajustesArriendos || [])]
           }
           onClose={() => setDecisionListingId('')}
           onSaveListingExtras={handleSaveListingExtras}

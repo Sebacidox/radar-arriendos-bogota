@@ -10,10 +10,17 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from config import (
+    ADJUSTMENT_MAX_FOTOS,
+    AJUSTES_ARRIENDOS_HEADERS,
+    AJUSTES_VENTAS_HEADERS,
     BASE_DIR,
     GOOGLE_CREDENTIALS_JSON,
+    SHEET_AJUSTES_ARRIENDOS,
+    SHEET_AJUSTES_VENTAS,
     SHEET_HISTORICO,
     SHEET_HISTORICO_VENTAS,
+    SHEET_RESUMEN_AJUSTES_ARRIENDOS,
+    SHEET_RESUMEN_AJUSTES_VENTAS,
     SHEET_RESUMEN_BARRIOS,
     SHEET_RESUMEN_BARRIOS_VENTAS,
     SHEET_TOP_SEMANA,
@@ -164,6 +171,7 @@ CUSTOM_COL_WIDTHS: dict[str, int] = {
     "Antiguedad": 145,
     "Etiquetas_Confort": 240,
     "Dias_en_Mercado": 120,
+    "Motivos_Ajuste": 250,
     "Fotos": 260,
     "Fuente": 135,
     "Enlaces": 290,
@@ -255,11 +263,13 @@ def _read_manual_notes(ws: gspread.Worksheet) -> dict[str, tuple[str, str, str]]
     return notes_by_fp
 
 
-def _format_fotos(fotos: list[str] | None) -> str:
-    """Serializa todas las URLs limpias separadas por '|' respetando el límite de celda de Sheets."""
+def _format_fotos(fotos: list[str] | None, limit: int | None = None) -> str:
+    """Serializa las URLs limpias separadas por '|' respetando tope opcional y límite de celda."""
     urls: list[str] = []
     total_len = 0
     for url in fotos or []:
+        if limit is not None and len(urls) >= limit:
+            break
         u = str(url or "").strip()
         if not u:
             continue
@@ -786,8 +796,14 @@ def _build_top_rows(
     active_listings: list[EvaluatedListing],
     manual_notes: dict[str, tuple[str, str, str]],
     operacion: str,
+    include_motivos: bool = False,
 ) -> list[list[object]]:
-    headers = TOP_VENTAS_HEADERS if operacion == "venta" else TOP_SEMANA_HEADERS
+    if include_motivos:
+        headers = AJUSTES_VENTAS_HEADERS if operacion == "venta" else AJUSTES_ARRIENDOS_HEADERS
+        fotos_limit: int | None = ADJUSTMENT_MAX_FOTOS
+    else:
+        headers = TOP_VENTAS_HEADERS if operacion == "venta" else TOP_SEMANA_HEADERS
+        fotos_limit = None
     rows: list[list[object]] = [headers]
     for item in active_listings:
         estado_visita, notas_personales, checklist_visita = manual_notes.get(
@@ -814,6 +830,8 @@ def _build_top_rows(
         else:
             money_cols = [item.canon, item.administracion, item.costo_total]
 
+        extra_cols: list[object] = [item.motivos_ajuste] if include_motivos else []
+
         rows.append(
             [
                 *common_prefix,
@@ -824,7 +842,8 @@ def _build_top_rows(
                 round(item.costo_m2, 0),
                 item.etiquetas_confort,
                 item.dias_en_mercado,
-                _format_fotos(item.fotos),
+                *extra_cols,
+                _format_fotos(item.fotos, limit=fotos_limit),
                 _format_sources(item.portales_enlaces),
                 _format_urls(item.portales_enlaces),
                 item.fecha_ultima_deteccion,
@@ -955,6 +974,8 @@ def _record_to_evaluated(rec: dict, operacion: str) -> EvaluatedListing:
         antiguedad=rec.get("antiguedad") or "",
         dias_en_mercado=int(rec.get("dias_en_mercado") or 0),
         etiquetas_confort=rec.get("etiquetas_confort") or "",
+        categoria_filtro=rec.get("categoria_filtro") or "exacto",
+        motivos_ajuste=rec.get("motivos_ajuste") or "",
     )
 
 
@@ -987,18 +1008,27 @@ def export_to_sheets(
     history_arriendos: list[dict],
     active_ventas: list[EvaluatedListing],
     history_ventas: list[dict],
+    ajustes_arriendos: list[EvaluatedListing] | None = None,
+    ajustes_ventas: list[EvaluatedListing] | None = None,
+    history_ajustes_arriendos: list[dict] | None = None,
+    history_ajustes_ventas: list[dict] | None = None,
     spreadsheet_id: str = SPREADSHEET_ID,
     credentials_value: str = GOOGLE_CREDENTIALS_JSON,
 ) -> None:
-    """Actualiza las 6 pestañas (arriendos y ventas) con formato visual y gráficas."""
+    """Actualiza las pestañas (exactos y ajustes razonables) con formato visual y gráficas."""
     if not spreadsheet_id:
         raise ValueError("SPREADSHEET_ID no está configurado en .env.")
+
+    ajustes_arr = ajustes_arriendos or []
+    ajustes_vta = ajustes_ventas or []
+    hist_adj_arr = history_ajustes_arriendos if history_ajustes_arriendos is not None else history_arriendos
+    hist_adj_vta = history_ajustes_ventas if history_ajustes_ventas is not None else history_ventas
 
     creds = _load_credentials(credentials_value)
     client = gspread.authorize(creds)
     spreadsheet = client.open_by_key(spreadsheet_id)
 
-    # Preparar hojas y preservar apuntes manuales en Top_Semana y Top semana ventas
+    # Preparar hojas y preservar apuntes manuales en Exactos y Ajustes Razonables
     ws_top_arr = _get_or_create_worksheet(spreadsheet, SHEET_TOP_SEMANA, rows=500, cols=len(TOP_SEMANA_HEADERS))
     notes_arr = _read_manual_notes(ws_top_arr)
     top_arr_listings = _append_unavailable_favorites(
@@ -1007,6 +1037,13 @@ def export_to_sheets(
 
     ws_hist_arr = _get_or_create_worksheet(spreadsheet, SHEET_HISTORICO, rows=2000, cols=len(HISTORICO_ARRIENDOS_HEADERS))
     ws_res_arr = _get_or_create_worksheet(spreadsheet, SHEET_RESUMEN_BARRIOS, rows=60, cols=26)
+
+    ws_adj_arr = _get_or_create_worksheet(spreadsheet, SHEET_AJUSTES_ARRIENDOS, rows=500, cols=len(AJUSTES_ARRIENDOS_HEADERS))
+    notes_adj_arr = _read_manual_notes(ws_adj_arr)
+    adj_arr_listings = _append_unavailable_favorites(
+        ajustes_arr, hist_adj_arr, notes_adj_arr, "arriendo"
+    )
+    ws_res_adj_arr = _get_or_create_worksheet(spreadsheet, SHEET_RESUMEN_AJUSTES_ARRIENDOS, rows=60, cols=26)
 
     ws_top_vta = _get_or_create_worksheet(spreadsheet, SHEET_TOP_VENTAS, rows=500, cols=len(TOP_VENTAS_HEADERS))
     notes_vta = _read_manual_notes(ws_top_vta)
@@ -1017,13 +1054,24 @@ def export_to_sheets(
     ws_hist_vta = _get_or_create_worksheet(spreadsheet, SHEET_HISTORICO_VENTAS, rows=2000, cols=len(HISTORICO_VENTAS_HEADERS))
     ws_res_vta = _get_or_create_worksheet(spreadsheet, SHEET_RESUMEN_BARRIOS_VENTAS, rows=60, cols=26)
 
+    ws_adj_vta = _get_or_create_worksheet(spreadsheet, SHEET_AJUSTES_VENTAS, rows=500, cols=len(AJUSTES_VENTAS_HEADERS))
+    notes_adj_vta = _read_manual_notes(ws_adj_vta)
+    adj_vta_listings = _append_unavailable_favorites(
+        ajustes_vta, hist_adj_vta, notes_adj_vta, "venta"
+    )
+    ws_res_adj_vta = _get_or_create_worksheet(spreadsheet, SHEET_RESUMEN_AJUSTES_VENTAS, rows=60, cols=26)
+
     tables = [
         (ws_top_arr, _build_top_rows(top_arr_listings, notes_arr, "arriendo"), THEME_ARRIENDO, None),
         (ws_hist_arr, _build_historico_rows(history_arriendos, "arriendo"), THEME_ARRIENDO, None),
         (ws_res_arr, _build_resumen_rows(active_arriendos, "arriendo"), THEME_ARRIENDO, "arriendo"),
+        (ws_adj_arr, _build_top_rows(adj_arr_listings, notes_adj_arr, "arriendo", include_motivos=True), THEME_ARRIENDO, None),
+        (ws_res_adj_arr, _build_resumen_rows(ajustes_arr, "arriendo"), THEME_ARRIENDO, "arriendo"),
         (ws_top_vta, _build_top_rows(top_vta_listings, notes_vta, "venta"), THEME_VENTA, None),
         (ws_hist_vta, _build_historico_rows(history_ventas, "venta"), THEME_VENTA, None),
         (ws_res_vta, _build_resumen_rows(active_ventas, "venta"), THEME_VENTA, "venta"),
+        (ws_adj_vta, _build_top_rows(adj_vta_listings, notes_adj_vta, "venta", include_motivos=True), THEME_VENTA, None),
+        (ws_res_adj_vta, _build_resumen_rows(ajustes_vta, "venta"), THEME_VENTA, "venta"),
     ]
 
     for ws, rows, _, _ in tables:
@@ -1056,7 +1104,7 @@ def export_to_sheets(
                 theme=theme,
             )
         )
-        if resumen_op is not None:
+        if resumen_op is not None and len(rows) > 1:
             batch_requests.extend(
                 _build_resumen_charts(
                     sheet_id=sid,

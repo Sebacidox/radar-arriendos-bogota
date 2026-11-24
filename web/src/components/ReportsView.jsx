@@ -23,24 +23,72 @@ import {
 export default function ReportsView({
   arriendos,
   ventas,
+  ajustesArriendos = [],
+  ajustesVentas = [],
   resumenBarrios,
   resumenBarriosVentas,
+  resumenAjustesArriendos = [],
+  resumenAjustesVentas = [],
   historicoCompleto,
   historicoVentas,
   onSelectProperty,
 }) {
   const [mode, setMode] = useState('arriendo');
+  const [datasetScope, setDatasetScope] = useState('exactos');
 
   const isVenta = mode === 'venta';
+  const isAjustes = datasetScope === 'ajustes';
+
+  const currentArrPool = isAjustes ? ajustesArriendos : arriendos;
+  const currentVtaPool = isAjustes ? ajustesVentas : ventas;
+
   const activeList = useMemo(
     () =>
-      (isVenta ? ventas : arriendos).filter(
+      (isVenta ? currentVtaPool : currentArrPool).filter(
         (x) => x.estadoVisita !== 'Descartado' && !isListingUnavailable(x)
       ),
-    [isVenta, ventas, arriendos]
+    [isVenta, currentVtaPool, currentArrPool]
   );
-  const resumenList = isVenta ? resumenBarriosVentas : resumenBarrios;
-  const histList = isVenta ? historicoVentas : historicoCompleto;
+
+  const resumenList = useMemo(() => {
+    const provided = isAjustes
+      ? isVenta
+        ? resumenAjustesVentas
+        : resumenAjustesArriendos
+      : isVenta
+        ? resumenBarriosVentas
+        : resumenBarrios;
+    if (provided && provided.length > 0) return provided;
+
+    // Respaldo calculado en el cliente si la hoja de resumen aún está vacía
+    const grouped = new Map();
+    for (const item of activeList) {
+      const key = formatTitleCase(item.barrio) || 'Bogotá Norte';
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(item);
+    }
+    return Array.from(grouped.entries()).map(([barrio, items]) => ({
+      barrio,
+      ofertasActivas: items.length,
+      promedioM2:
+        items.reduce((acc, x) => acc + (Number(x.costoM2) || 0), 0) /
+        Math.max(1, items.length),
+    }));
+  }, [
+    isAjustes,
+    isVenta,
+    resumenAjustesVentas,
+    resumenAjustesArriendos,
+    resumenBarriosVentas,
+    resumenBarrios,
+    activeList,
+  ]);
+
+  // Historial independiente: no mezclar bajas históricas de Exactos dentro de Ajustes razonables
+  const histList = useMemo(
+    () => (isAjustes ? [] : isVenta ? historicoVentas : historicoCompleto),
+    [isAjustes, isVenta, historicoVentas, historicoCompleto]
+  );
 
   // 1. ¿Dónde rinde más el presupuesto? (Precio promedio por m² por barrio)
   const budgetChartData = useMemo(() => {
@@ -189,39 +237,68 @@ export default function ReportsView({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-stone-200/75 bg-white p-5 shadow-[0_2px_14px_-4px_rgba(28,25,23,0.06)] lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="font-serif text-2xl font-bold text-ink">
-            Panorama del Mercado
+            Panorama del Mercado {isAjustes ? '· Ajustes razonables' : ''}
           </h2>
           <p className="mt-0.5 text-sm text-stone-700">
-            Lectura clara de precios, oportunidades y margen de negociación en Bogotá Norte.
+            {isAjustes
+              ? 'Informes independientes solo de apartamentos con márgenes flexibles (65–69 m², hasta $4.2M / $850M o ≤ 9 km).'
+              : 'Lectura clara de precios, oportunidades y margen de negociación de apartamentos que cumplen el 100%.'}
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setMode('arriendo')}
-            className={`min-h-[42px] rounded-xl px-4 py-2 text-xs font-semibold transition ${
-              !isVenta
-                ? 'bg-sage text-white shadow-sm'
-                : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
-            }`}
-          >
-            Arriendos ({arriendos.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('venta')}
-            className={`min-h-[42px] rounded-xl px-4 py-2 text-xs font-semibold transition ${
-              isVenta
-                ? 'bg-sage text-white shadow-sm'
-                : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
-            }`}
-          >
-            Ventas ({ventas.length})
-          </button>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-1.5 rounded-xl border border-stone-200/80 bg-ivory p-1">
+            <button
+              type="button"
+              onClick={() => setDatasetScope('exactos')}
+              className={`min-h-[38px] rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                !isAjustes
+                  ? 'bg-ink text-white shadow-sm'
+                  : 'text-stone-700 hover:bg-white hover:text-ink'
+              }`}
+            >
+              Requisitos exactos ({arriendos.length + ventas.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setDatasetScope('ajustes')}
+              className={`min-h-[38px] rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                isAjustes
+                  ? 'bg-amberWarm text-white shadow-sm'
+                  : 'text-stone-700 hover:bg-white hover:text-ink'
+              }`}
+            >
+              Ajustes razonables ({ajustesArriendos.length + ajustesVentas.length})
+            </button>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode('arriendo')}
+              className={`min-h-[42px] rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                !isVenta
+                  ? 'bg-sage text-white shadow-sm'
+                  : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
+              }`}
+            >
+              Arriendos ({currentArrPool.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('venta')}
+              className={`min-h-[42px] rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                isVenta
+                  ? 'bg-sage text-white shadow-sm'
+                  : 'border border-stone-200/80 bg-ivory text-stone-700 hover:bg-stone-100 hover:text-ink'
+              }`}
+            >
+              Ventas ({currentVtaPool.length})
+            </button>
+          </div>
         </div>
       </div>
 

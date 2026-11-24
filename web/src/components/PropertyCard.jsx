@@ -221,6 +221,15 @@ export default function PropertyCard({
                   : `Dirección no publicada · Zona ${listing.zona}`}
               </span>
             </p>
+            {listing.categoriaFiltro === 'ajuste_razonable' &&
+              listing.motivosAjuste?.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1 rounded-xl border border-amber-200/90 bg-amber-50/90 px-2.5 py-1.5 text-[11px] font-semibold text-amberWarm">
+                  <span>Ajuste razonable:</span>
+                  <span className="font-bold text-ink">
+                    {listing.motivosAjuste.join(' · ')}
+                  </span>
+                </div>
+              )}
           </div>
 
           {listing.origen === 'manual' && onDeleteManual && (
@@ -335,6 +344,11 @@ export default function PropertyCard({
                 {formatCOP(listing.canon + listing.admin)}
               </span>
             </div>
+            {listing.canon + listing.admin > 3500000 && (
+              <p className="mt-1 text-[11px] font-semibold text-amber-800">
+                Excede objetivo de $3.5M (+{formatCOP(listing.canon + listing.admin - 3500000)} · penalizado en score)
+              </p>
+            )}
             <div className="mt-2 space-y-1 text-xs text-stone-700">
               <div className="flex justify-between">
                 <span>Canon: {formatCOP(listing.canon)}</span>

@@ -9,6 +9,7 @@ from typing import Optional
 from models import RawListing
 from scrapers.base import (
     build_session,
+    enrich_candidates_concurrently,
     fetch_text,
     parse_float,
     parse_int,
@@ -28,6 +29,19 @@ ZONES = [
     "contador",
     "mazuren",
     "santa-barbara",
+    "barrancas",
+    "alcala",
+    "caobos-salazar",
+    "las-villas",
+    "iberia",
+    "prado-veraniego",
+    "chapinero",
+    "chico-norte",
+    "los-rosales",
+    "pasadena",
+    "niza",
+    "la-floresta",
+    "barrios-unidos",
 ]
 
 _extract_next_f_chunks = extract_next_f_chunks
@@ -196,6 +210,59 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
     )
 
 
+def _enrich_detail(session, listing: RawListing) -> None:
+    """Completa descripción y amenidades desde la ficha individual de Metrocuadrado."""
+    try:
+        detail_html = fetch_text(session, listing.url, timeout=15)
+    except Exception:
+        return
+
+    payload = extract_next_f_chunks(detail_html) or detail_html.replace('\\"', '"')
+    decoder = json.JSONDecoder()
+
+    # Extraer descripción completa ("comment":"...")
+    for match in re.finditer(r'"comment"\s*:\s*"', payload):
+        try:
+            comment_val, _ = decoder.raw_decode(payload, match.end() - 1)
+            if isinstance(comment_val, str) and len(comment_val) > len(listing.descripcion):
+                listing.descripcion = comment_val
+        except json.JSONDecodeError:
+            continue
+
+    # Extraer grupos de características ("featured":[...])
+    extra = list(listing.features_extra)
+    seen = {x.lower() for x in extra}
+    for match in re.finditer(r'"featured"\s*:\s*\[', payload):
+        try:
+            arr, _ = decoder.raw_decode(payload, match.end() - 1)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(arr, list):
+            continue
+        for group in arr:
+            if isinstance(group, dict):
+                for feat in group.get("items") or group.get("features") or []:
+                    label = feat.get("name") or feat.get("title") or feat.get("label") if isinstance(feat, dict) else feat
+                    if label:
+                        s_label = str(label).strip()
+                        if s_label.lower() not in seen:
+                            extra.append(s_label)
+                            seen.add(s_label.lower())
+            elif isinstance(group, str) and group.strip().lower() not in seen:
+                extra.append(group.strip())
+                seen.add(group.strip().lower())
+
+    # Respaldo directo en el texto de la ficha por si el formato de featured cambia
+    if not any("ascensor" in x.lower() for x in extra) and re.search(
+        r"\bascensor(?:es)?\b", payload, re.I
+    ):
+        # Evitar falsos positivos de "sin ascensor"
+        if not re.search(r"\b(?:sin|no\s+tiene|no\s+cuenta\s+con)\s+ascensor\b", payload, re.I):
+            extra.append("ascensor")
+
+    listing.features_extra = extra
+
+
 def _fetch_playwright_html(url: str) -> str:
     with playwright_page(headless=True) as page:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -234,4 +301,5 @@ def scrape_metrocuadrado(operacion: str = "arriendo") -> list[RawListing]:
 
         random_delay(0.8, 1.8)
 
+    enrich_candidates_concurrently(results, _enrich_detail, max_workers=4)
     return results

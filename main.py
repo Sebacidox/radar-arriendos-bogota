@@ -64,10 +64,13 @@ def _run_operation(
         if res is not None:
             evaluated.append(res)
 
+    exactos_count = sum(1 for x in evaluated if x.categoria_filtro == "exacto")
+    ajustes_count = sum(1 for x in evaluated if x.categoria_filtro == "ajuste_razonable")
     logger.info(
-        "[%s] Filtrado estricto (incl. ascensor): %d de %d anuncios cumplen todas las condiciones.",
+        "[%s] Clasificación: %d exactos y %d ajustes razonables (sobre %d crudos).",
         op_label,
-        len(evaluated),
+        exactos_count,
+        ajustes_count,
         len(raw_listings),
     )
 
@@ -94,7 +97,16 @@ def _run_operation(
 
     logger.info("[%s] Base de datos SQLite actualizada (%d históricos totales).", op_label, len(full_history))
 
-    for idx, item in enumerate(active_sorted[:10], start=1):
+    exactos_sorted = [x for x in active_sorted if x.categoria_filtro == "exacto"]
+    ajustes_sorted = [x for x in active_sorted if x.categoria_filtro == "ajuste_razonable"]
+    logger.info(
+        "[%s] Activos finales -> Exactos: %d | Ajustes razonables: %d",
+        op_label,
+        len(exactos_sorted),
+        len(ajustes_sorted),
+    )
+
+    for idx, item in enumerate(exactos_sorted[:10], start=1):
         logger.info(
             "[%s] Top %d | Puntuación %.1f | %s | %s | $%s | %.1fm² | %s",
             op_label,
@@ -113,18 +125,32 @@ def _run_operation(
 def run_pipeline() -> int:
     """Ejecuta el pipeline completo para arriendos y ventas y actualiza Google Sheets."""
     db = DatabaseManager()
-    active_arriendos, history_arriendos = _run_operation("arriendo", db)
-    active_ventas, history_ventas = _run_operation("venta", db)
+    active_arr_all, hist_arr_all = _run_operation("arriendo", db)
+    active_vta_all, hist_vta_all = _run_operation("venta", db)
+
+    active_arriendos = [x for x in active_arr_all if x.categoria_filtro == "exacto"]
+    ajustes_arriendos = [x for x in active_arr_all if x.categoria_filtro == "ajuste_razonable"]
+    history_arriendos = [r for r in hist_arr_all if (r.get("categoria_filtro") or "exacto") == "exacto"]
+    hist_adj_arriendos = [r for r in hist_arr_all if r.get("categoria_filtro") == "ajuste_razonable"]
+
+    active_ventas = [x for x in active_vta_all if x.categoria_filtro == "exacto"]
+    ajustes_ventas = [x for x in active_vta_all if x.categoria_filtro == "ajuste_razonable"]
+    history_ventas = [r for r in hist_vta_all if (r.get("categoria_filtro") or "exacto") == "exacto"]
+    hist_adj_ventas = [r for r in hist_vta_all if r.get("categoria_filtro") == "ajuste_razonable"]
 
     export_to_sheets(
         active_arriendos=active_arriendos,
         history_arriendos=history_arriendos,
         active_ventas=active_ventas,
         history_ventas=history_ventas,
+        ajustes_arriendos=ajustes_arriendos,
+        ajustes_ventas=ajustes_ventas,
+        history_ajustes_arriendos=hist_adj_arriendos,
+        history_ajustes_ventas=hist_adj_ventas,
     )
     logger.info(
         "Exportación a Google Sheets completada exitosamente "
-        "(Top_Semana, Historico_Completo, Resumen_Barrios, Top semana ventas, Histórico ventas, Resumen_Barrios_Ventas)."
+        "(Exactos + Ajustes Razonables + Resúmenes + Históricos)."
     )
     return 0
 

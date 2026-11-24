@@ -76,3 +76,5 @@ class EvaluatedListing:
     antiguedad: str = ""
     dias_en_mercado: int = 0
     etiquetas_confort: str = ""
+    categoria_filtro: str = "exacto"  # "exacto" | "ajuste_razonable"
+    motivos_ajuste: str = ""

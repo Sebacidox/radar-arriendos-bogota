@@ -9,16 +9,7 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 
-from config import (
-    ALLOWED_ESTRATOS,
-    LAT_MAX,
-    LAT_MIN,
-    LON_MAX,
-    LON_MIN,
-    MAX_COSTO_TOTAL,
-    MAX_PRECIO_VENTA,
-)
-from filters import is_in_barrio_whitelist
+from filters import passes_pre_detail_checks
 from models import RawListing
 from scrapers.base import (
     build_session,
@@ -37,10 +28,14 @@ SEARCH_PATHS_BY_OP = {
     "arriendo": [
         "/arriendo/apartamentos/bogota/usaquen",
         "/arriendo/apartamentos/bogota/suba",
+        "/arriendo/apartamentos/bogota/chapinero",
+        "/arriendo/apartamentos/bogota/barrios-unidos",
     ],
     "venta": [
         "/venta/apartamentos/bogota/usaquen",
         "/venta/apartamentos/bogota/suba",
+        "/venta/apartamentos/bogota/chapinero",
+        "/venta/apartamentos/bogota/barrios-unidos",
     ],
 }
 
@@ -57,38 +52,8 @@ def _extract_result_state(html_text: str) -> Optional[dict]:
     return json.loads(raw_json)
 
 
-def _passes_pre_detail_check(listing: RawListing) -> bool:
-    """Pre-filtro rápido para enriquecer descripción/amenidades solo de candidatos viables."""
-    if listing.area is None or listing.area <= 70:
-        return False
-    if listing.habitaciones is None or not (2 <= listing.habitaciones <= 3):
-        return False
-    if listing.banos is None or listing.banos < 2:
-        return False
-    if listing.parqueaderos is None or listing.parqueaderos < 1:
-        return False
-    if listing.estrato is None or listing.estrato not in ALLOWED_ESTRATOS:
-        return False
-    if listing.operacion == "venta":
-        if listing.precio_venta is None or listing.precio_venta <= 0 or listing.precio_venta > MAX_PRECIO_VENTA:
-            return False
-    else:
-        if listing.canon is None or listing.canon <= 0 or listing.canon > MAX_COSTO_TOTAL:
-            return False
-
-    if listing.latitud is not None and listing.longitud is not None:
-        if not (LAT_MIN <= listing.latitud <= LAT_MAX and LON_MIN <= listing.longitud <= LON_MAX):
-            return False
-    else:
-        ok, _ = is_in_barrio_whitelist(listing.barrio)
-        if not ok:
-            return False
-
-    return True
-
-
 def _enrich_detail(session, listing: RawListing) -> None:
-    """Obtiene descripción y amenidades desde la ficha individual de Ciencuadras."""
+    """Obtiene descripción, administración y amenidades desde la ficha individual de Ciencuadras."""
     try:
         detail_html = fetch_text(session, listing.url, timeout=15)
     except Exception:
@@ -96,6 +61,38 @@ def _enrich_detail(session, listing: RawListing) -> None:
 
     soup = BeautifulSoup(detail_html, "html.parser")
     text_parts: list[str] = []
+
+    # Intentar extraer también datos estructurados de detail-state si están presentes
+    detail_match = re.search(
+        r'<script[^>]+id="detail-state"[^>]*>(.*?)</script>',
+        detail_html,
+        re.S,
+    )
+    if detail_match:
+        try:
+            raw_json = html.unescape(detail_match.group(1).replace("&q;", '"'))
+            state = json.loads(raw_json)
+            if isinstance(state, dict):
+                for val in state.values():
+                    data_obj = val.get("data") if isinstance(val, dict) else None
+                    if not isinstance(data_obj, dict):
+                        continue
+                    desc = data_obj.get("description") or data_obj.get("observations")
+                    if desc:
+                        text_parts.append(str(desc))
+                    if (listing.administracion is None or listing.administracion <= 0) and data_obj.get("adminValue"):
+                        adm_val = parse_int(data_obj.get("adminValue"))
+                        if adm_val and adm_val > 0:
+                            listing.administracion = adm_val
+                    for key in ("amenities", "features", "characteristics", "interiorFeatures", "exteriorFeatures"):
+                        items_arr = data_obj.get(key)
+                        if isinstance(items_arr, list):
+                            for entry in items_arr:
+                                name = entry.get("name") or entry.get("description") if isinstance(entry, dict) else entry
+                                if name:
+                                    listing.features_extra.append(str(name).strip())
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
 
     # Meta description y bloques de descripción/características
     meta_desc = soup.find("meta", attrs={"name": "description"})
@@ -263,7 +260,7 @@ def scrape_ciencuadras(max_pages_per_zone: int = 8, operacion: str = "arriendo")
                 parsed = _parse_item(raw_item, operacion=operacion)
                 if parsed and parsed.external_id not in seen_ids:
                     seen_ids.add(parsed.external_id)
-                    if _passes_pre_detail_check(parsed):
+                    if passes_pre_detail_checks(parsed):
                         _enrich_detail(session, parsed)
                         random_delay(0.4, 0.9)
                     results.append(parsed)

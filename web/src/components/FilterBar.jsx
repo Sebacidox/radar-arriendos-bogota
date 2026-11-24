@@ -19,15 +19,24 @@ const SORT_LABELS = {
   area_asc: 'Metraje: menor a mayor',
 };
 
-const PRICE_OPTIONS_ARRIENDO = [
-  { value: '', label: 'Cualquier precio (hasta $3.5M)' },
+const PRICE_OPTIONS_ARRIENDO_EXACTO = [
+  { value: '', label: 'Cualquier precio (hasta $3.8M)' },
   { value: '2800000', label: 'Hasta $2.800.000' },
   { value: '3000000', label: 'Hasta $3.000.000' },
   { value: '3200000', label: 'Hasta $3.200.000' },
-  { value: '3500000', label: 'Hasta $3.500.000' },
+  { value: '3500000', label: 'Hasta $3.500.000 (objetivo)' },
+  { value: '3800000', label: 'Hasta $3.800.000' },
 ];
 
-const PRICE_OPTIONS_VENTA = [
+const PRICE_OPTIONS_ARRIENDO_AJUSTE = [
+  { value: '', label: 'Cualquier precio (hasta $4.2M)' },
+  { value: '3500000', label: 'Hasta $3.500.000' },
+  { value: '3800000', label: 'Hasta $3.800.000' },
+  { value: '4000000', label: 'Hasta $4.000.000' },
+  { value: '4200000', label: 'Hasta $4.200.000 (ajuste máx.)' },
+];
+
+const PRICE_OPTIONS_VENTA_EXACTO = [
   { value: '', label: 'Cualquier precio (hasta $800M)' },
   { value: '500000000', label: 'Hasta $500 millones' },
   { value: '600000000', label: 'Hasta $600 millones' },
@@ -35,12 +44,28 @@ const PRICE_OPTIONS_VENTA = [
   { value: '800000000', label: 'Hasta $800 millones' },
 ];
 
-const AREA_OPTIONS = [
-  { value: '', label: 'Cualquier metraje (> 70 m²)' },
+const PRICE_OPTIONS_VENTA_AJUSTE = [
+  { value: '', label: 'Cualquier precio (hasta $850M)' },
+  { value: '650000000', label: 'Hasta $650 millones' },
+  { value: '750000000', label: 'Hasta $750 millones' },
+  { value: '800000000', label: 'Hasta $800 millones' },
+  { value: '850000000', label: 'Hasta $850 millones (ajuste máx.)' },
+];
+
+const AREA_OPTIONS_EXACTO = [
+  { value: '', label: 'Cualquier metraje (≥ 70 m²)' },
   { value: '75', label: 'Desde 75 m²' },
   { value: '80', label: 'Desde 80 m²' },
   { value: '90', label: 'Desde 90 m²' },
   { value: '100', label: 'Desde 100 m²' },
+];
+
+const AREA_OPTIONS_AJUSTE = [
+  { value: '', label: 'Cualquier metraje (≥ 65 m²)' },
+  { value: '65', label: 'Desde 65 m²' },
+  { value: '70', label: 'Desde 70 m²' },
+  { value: '75', label: 'Desde 75 m²' },
+  { value: '80', label: 'Desde 80 m²' },
 ];
 
 const SCORE_OPTIONS = [
@@ -57,6 +82,7 @@ export default function FilterBar({
   totalCount,
   filteredCount,
   operacion,
+  isAjustes = false,
   onOpenManualModal,
 }) {
   const toggleFlag = (key) => {
@@ -64,7 +90,14 @@ export default function FilterBar({
   };
 
   const priceOptions =
-    operacion === 'venta' ? PRICE_OPTIONS_VENTA : PRICE_OPTIONS_ARRIENDO;
+    operacion === 'venta'
+      ? isAjustes
+        ? PRICE_OPTIONS_VENTA_AJUSTE
+        : PRICE_OPTIONS_VENTA_EXACTO
+      : isAjustes
+        ? PRICE_OPTIONS_ARRIENDO_AJUSTE
+        : PRICE_OPTIONS_ARRIENDO_EXACTO;
+  const areaOptions = isAjustes ? AREA_OPTIONS_AJUSTE : AREA_OPTIONS_EXACTO;
 
   const hasActiveFilters =
     filters.onlyNew ||
@@ -199,7 +232,7 @@ export default function FilterBar({
             onChange={(e) => onChange({ ...filters, minArea: e.target.value })}
             className="min-h-[42px] w-full rounded-xl border border-stone-200/80 bg-ivory px-3 py-1.5 text-xs font-semibold text-ink focus:border-sage focus:bg-white focus:outline-none focus:ring-2 focus:ring-sage/15"
           >
-            {AREA_OPTIONS.map((opt) => (
+            {areaOptions.map((opt) => (
               <option key={opt.value || 'all'} value={opt.value}>
                 {opt.label}
               </option>

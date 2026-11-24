@@ -25,6 +25,8 @@ SEARCH_SLUGS = [
     "bogota-d-c-colombia",
     "usaquen-bogota-d-c-colombia",
     "suba-bogota-d-c-colombia",
+    "chapinero-bogota-d-c-colombia",
+    "barrios-unidos-bogota-d-c-colombia",
 ]
 
 

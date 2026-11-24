@@ -8,9 +8,15 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 
+from config import (
+    ADJUSTMENT_MAX_COSTO_TOTAL,
+    ADJUSTMENT_MAX_PRECIO_VENTA,
+    ADJUSTMENT_MIN_AREA_M2,
+)
 from models import RawListing
 from scrapers.base import (
     build_session,
+    enrich_candidates_concurrently,
     fetch_text,
     parse_float,
     parse_int,
@@ -23,12 +29,16 @@ BASE_URL = "https://www.fincaraiz.com.co"
 
 SEARCH_PATHS_BY_OP = {
     "arriendo": [
-        "/arriendo/apartamentos/bogota/usaquen/2-habitaciones-3-habitaciones/hasta-3500000",
-        "/arriendo/apartamentos/bogota/suba/2-habitaciones-3-habitaciones/hasta-3500000",
+        f"/arriendo/apartamentos/bogota/usaquen/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_COSTO_TOTAL}",
+        f"/arriendo/apartamentos/bogota/suba/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_COSTO_TOTAL}",
+        f"/arriendo/apartamentos/bogota/chapinero/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_COSTO_TOTAL}",
+        f"/arriendo/apartamentos/bogota/barrios-unidos/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_COSTO_TOTAL}",
     ],
     "venta": [
-        "/venta/apartamentos/bogota/usaquen/2-habitaciones-3-habitaciones/hasta-800000000",
-        "/venta/apartamentos/bogota/suba/2-habitaciones-3-habitaciones/hasta-800000000",
+        f"/venta/apartamentos/bogota/usaquen/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_PRECIO_VENTA}",
+        f"/venta/apartamentos/bogota/suba/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_PRECIO_VENTA}",
+        f"/venta/apartamentos/bogota/chapinero/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_PRECIO_VENTA}",
+        f"/venta/apartamentos/bogota/barrios-unidos/2-habitaciones-3-habitaciones/m2-desde-{int(ADJUSTMENT_MIN_AREA_M2)}/hasta-{ADJUSTMENT_MAX_PRECIO_VENTA}",
     ],
 }
 
@@ -146,6 +156,51 @@ def _parse_item(item: dict, operacion: str = "arriendo") -> Optional[RawListing]
     )
 
 
+def _enrich_detail(session, listing: RawListing) -> None:
+    """Completa descripción, amenidades, administración y fotos desde la ficha de Fincaraíz."""
+    try:
+        detail_html = fetch_text(session, listing.url, timeout=15)
+        data = _extract_next_data(detail_html)
+    except Exception:
+        return
+    if not data:
+        return
+
+    page_props = data.get("props", {}).get("pageProps", {})
+    prop = page_props.get("data") or page_props.get("property") or {}
+    if not isinstance(prop, dict):
+        return
+
+    desc = str(prop.get("description") or "").strip()
+    if len(desc) > len(listing.descripcion):
+        listing.descripcion = desc
+
+    extra = list(listing.features_extra)
+    seen = {x.lower() for x in extra}
+    for fac in prop.get("facilities") or []:
+        if isinstance(fac, dict) and fac.get("name"):
+            name = str(fac["name"]).strip()
+            if name.lower() not in seen:
+                extra.append(name)
+                seen.add(name.lower())
+    listing.features_extra = extra
+
+    if prop.get("include_administration"):
+        listing.admin_incluida = True
+    common_amt = parse_int((prop.get("commonExpenses") or {}).get("amount"))
+    if (listing.administracion is None or listing.administracion <= 0) and common_amt and common_amt > 0:
+        listing.administracion = common_amt
+
+    imgs: list[str] = []
+    for img_obj in prop.get("images") or []:
+        if isinstance(img_obj, dict) and img_obj.get("image"):
+            imgs.append(str(img_obj["image"]))
+        elif isinstance(img_obj, str):
+            imgs.append(img_obj)
+    if len(imgs) > len(listing.fotos):
+        listing.fotos = imgs
+
+
 def _fetch_page_playwright(url: str) -> str:
     with playwright_page(headless=True) as page:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -206,4 +261,5 @@ def scrape_fincaraiz(max_pages_per_zone: int = 8, operacion: str = "arriendo") -
 
             random_delay(0.7, 1.5)
 
+    enrich_candidates_concurrently(results, _enrich_detail, max_workers=4)
     return results

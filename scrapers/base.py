@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 import requests
 from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
 from config import USER_AGENTS
+from filters import detect_elevator, passes_pre_detail_checks
+from models import RawListing
 
 
 def get_random_user_agent() -> str:
@@ -97,3 +100,41 @@ def parse_float(value: object) -> Optional[float]:
         return float(cleaned) if cleaned else None
     except ValueError:
         return None
+
+
+def needs_detail_enrichment(listing: RawListing) -> bool:
+    """Determina si conviene consultar la ficha individual antes del filtro final."""
+    if not passes_pre_detail_checks(listing):
+        return False
+    missing_elevator = not detect_elevator(
+        listing.titulo, listing.descripcion, listing.features_extra
+    )
+    missing_rent_admin = (
+        (listing.operacion or "arriendo").lower() == "arriendo"
+        and not listing.admin_incluida
+        and (listing.administracion is None or listing.administracion <= 0)
+    )
+    return missing_elevator or missing_rent_admin
+
+
+def enrich_candidates_concurrently(
+    listings: list[RawListing],
+    enrich_fn: Callable[[requests.Session, RawListing], None],
+    max_workers: int = 4,
+) -> None:
+    """Enriquece en paralelo solo candidatos viables con datos incompletos en tarjeta."""
+    targets = [item for item in listings if needs_detail_enrichment(item)]
+    if not targets:
+        return
+
+    def _run_one(item: RawListing) -> None:
+        sess = build_session()
+        enrich_fn(sess, item)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_run_one, item) for item in targets]
+        for fut in as_completed(futures):
+            try:
+                fut.result()
+            except Exception:
+                continue

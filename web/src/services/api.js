@@ -69,7 +69,22 @@ function splitComfortTags(val) {
     .filter(Boolean);
 }
 
-function normalizeListingRow(row, operacion, sheetName, origen = 'radar') {
+function splitAdjustmentReasons(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+  return String(val)
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function normalizeListingRow(
+  row,
+  operacion,
+  sheetName,
+  origen = 'radar',
+  defaultCategoria = 'exacto'
+) {
   const isVenta = operacion === 'venta';
   const canon = isVenta ? 0 : parseNumber(row['Canon'], 0);
   const precioVenta = isVenta ? parseNumber(row['Precio Venta'], 0) : 0;
@@ -94,11 +109,17 @@ function normalizeListingRow(row, operacion, sheetName, origen = 'radar') {
   const lng = row['Lng'] !== '' && row['Lng'] !== undefined ? parseNumber(row['Lng'], null) : null;
   const extras = parseListingExtras(row['Checklist_Visita']);
 
+  const motivosAjuste = splitAdjustmentReasons(row['Motivos_Ajuste']);
+  const categoriaFiltro =
+    motivosAjuste.length > 0 ? 'ajuste_razonable' : defaultCategoria;
+
   return {
     id: `${operacion}:${String(row['Fingerprint'] || '')}`,
     operacion,
     sheetName,
     origen,
+    categoriaFiltro,
+    motivosAjuste,
     fingerprint: String(row['Fingerprint'] || '').trim(),
     score: parseNumber(row['Puntuación'], origen === 'manual' ? 7.5 : 0),
     estado: String(row['Estado'] || (origen === 'manual' ? 'Aviso propio' : '')).trim(),
@@ -210,13 +231,33 @@ export async function fetchRadarData() {
   const sheetNames = data.sheetNames || {
     ARRIENDOS: 'Top_Semana',
     VENTAS: 'Top semana ventas',
+    AJUSTES_ARRIENDOS: 'Ajustes_Arriendos',
+    AJUSTES_VENTAS: 'Ajustes_Ventas',
   };
 
   const arriendos = (data.arriendos || []).map((row) =>
-    normalizeListingRow(row, 'arriendo', sheetNames.ARRIENDOS || 'Top_Semana')
+    normalizeListingRow(row, 'arriendo', sheetNames.ARRIENDOS || 'Top_Semana', 'radar', 'exacto')
   );
   const ventas = (data.ventas || []).map((row) =>
-    normalizeListingRow(row, 'venta', sheetNames.VENTAS || 'Top semana ventas')
+    normalizeListingRow(row, 'venta', sheetNames.VENTAS || 'Top semana ventas', 'radar', 'exacto')
+  );
+  const ajustesArriendos = (data.ajustesArriendos || []).map((row) =>
+    normalizeListingRow(
+      row,
+      'arriendo',
+      sheetNames.AJUSTES_ARRIENDOS || 'Ajustes_Arriendos',
+      'radar',
+      'ajuste_razonable'
+    )
+  );
+  const ajustesVentas = (data.ajustesVentas || []).map((row) =>
+    normalizeListingRow(
+      row,
+      'venta',
+      sheetNames.AJUSTES_VENTAS || 'Ajustes_Ventas',
+      'radar',
+      'ajuste_razonable'
+    )
   );
   const misAvisos = (data.misAvisos || [])
     .map((row) => {
@@ -240,9 +281,17 @@ export async function fetchRadarData() {
     sheetNames,
     arriendos,
     ventas,
+    ajustesArriendos,
+    ajustesVentas,
     misAvisos,
     resumenBarrios: (data.resumenBarrios || []).map((r) => normalizeResumenRow(r, 'arriendo')),
     resumenBarriosVentas: (data.resumenBarriosVentas || []).map((r) =>
+      normalizeResumenRow(r, 'venta')
+    ),
+    resumenAjustesArriendos: (data.resumenAjustesArriendos || []).map((r) =>
+      normalizeResumenRow(r, 'arriendo')
+    ),
+    resumenAjustesVentas: (data.resumenAjustesVentas || []).map((r) =>
       normalizeResumenRow(r, 'venta')
     ),
     historicoCompleto: (data.historicoCompleto || []).map((r) =>
